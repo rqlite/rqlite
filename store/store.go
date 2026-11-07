@@ -788,10 +788,7 @@ func (s *Store) Open() (retErr error) {
 	}, true)
 	s.dbCfg.MaxReaders = s.MaxReadOnlyConns
 	if s.cdcConf != nil {
-		s.cdcCollator, err = sql.NewCDCCollator(&ColumnNamesProvider{s})
-		if err != nil {
-			return fmt.Errorf("failed to create CDC collator: %s", err)
-		}
+		s.cdcCollator = sql.NewCDCCollator()
 		s.dbCfg.Writer.PreUpdateHook = s.cdcCollator.PreupdateHook
 		s.dbCfg.Writer.PreUpdateTableRe = s.cdcConf.TableRe
 		s.dbCfg.Writer.PreUpdateRowIDsOnly = s.cdcConf.RowIDsOnly

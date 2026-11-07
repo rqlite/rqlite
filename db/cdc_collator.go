@@ -2,14 +2,11 @@ package db
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 )
-
-// ColumnsNameProvider provides column names for a given table.
-type ColumnsNameProvider interface {
-	ColumnNames(table string) ([]string, error)
-}
 
 // CDCCollator gathers Change Data Capture events. It implements the SQLite
 // preupdate, commit, and rollback hooks.
@@ -28,15 +25,11 @@ type ColumnsNameProvider interface {
 type CDCCollator struct {
 	events  []*command.CDCEvent
 	pending []*command.CDCEvent
-	db      ColumnsNameProvider
 }
 
-// NewCDCCollator returns a collator that resolves column names through db.
-func NewCDCCollator(db ColumnsNameProvider) (*CDCCollator, error) {
-	if db == nil {
-		return nil, fmt.Errorf("nil ColumnsNameProvider")
-	}
-	return &CDCCollator{db: db}, nil
+// NewCDCCollator returns a collator with no events collected.
+func NewCDCCollator() *CDCCollator {
+	return &CDCCollator{}
 }
 
 // Reset discards all collected events, and the events of any transaction
@@ -68,11 +61,11 @@ func (c *CDCCollator) RollbackHook() {
 }
 
 // CommitHook adds the events of the transaction in progress to the collected
-// events. Column names are resolved here rather than later, because a
-// subsequent transaction in the same change entry may alter the table. It
-// always returns true, because CDC bookkeeping must never cause a transaction
-// to be rolled back.
-func (c *CDCCollator) CommitHook() bool {
+// events. Column names are resolved through conn, the connection committing
+// the transaction, so they reflect the schema as that transaction sees it at
+// commit time. It always returns true, because CDC bookkeeping must never
+// cause a transaction to be rolled back.
+func (c *CDCCollator) CommitHook(conn *sqlite3.SQLiteConn) bool {
 	events := c.pending
 	c.pending = nil
 	if len(events) == 0 {
@@ -83,7 +76,7 @@ func (c *CDCCollator) CommitHook() bool {
 	colNames := make(map[string][]string)
 	for _, ev := range events {
 		if _, ok := colNames[ev.Table]; !ok {
-			names, err := c.db.ColumnNames(ev.Table)
+			names, err := columnNames(conn, ev.Table)
 			if err != nil {
 				ev.Error = fmt.Sprintf("failed to get column names for table %s: %v", ev.Table, err)
 				continue
@@ -95,4 +88,15 @@ func (c *CDCCollator) CommitHook() bool {
 
 	c.events = append(c.events, events...)
 	return true
+}
+
+// columnNames returns the names of the columns of table as seen by conn,
+// including any schema change made by a transaction open on conn.
+func columnNames(conn *sqlite3.SQLiteConn, table string) ([]string, error) {
+	rows, err := conn.Query(fmt.Sprintf(`SELECT * FROM "%s" LIMIT 0`, strings.ReplaceAll(table, `"`, `""`)), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return rows.Columns(), nil
 }
