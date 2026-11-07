@@ -44,7 +44,12 @@ func (sc *SyncChannels) Sync(timeout time.Duration) (int, int, error) {
 		go func(ch chan<- chan struct{}) {
 			defer wg.Done()
 			syncCh := make(chan struct{})
-			ch <- syncCh
+			select {
+			case ch <- syncCh:
+			case <-cancel:
+				// Participant never received; give up rather than block forever.
+				return
+			}
 			select {
 			case <-syncCh:
 				nOK.Add(1)

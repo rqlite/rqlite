@@ -2,6 +2,7 @@ package rsync
 
 import (
 	"errors"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -102,6 +103,32 @@ func Test_Sync_Timeout_WhenParticipantNeverCloses(t *testing.T) {
 	}
 	if total != 2 || ok != 1 {
 		t.Fatalf("Sync() returned total=%d, ok=%d; want 2,1", total, ok)
+	}
+}
+
+// Test_Sync_Timeout_WhenParticipantNeverReceives checks that a participant
+// which never reads from its registered channel does not leave Sync's
+// goroutines blocked forever once Sync has timed out.
+func Test_Sync_Timeout_WhenParticipantNeverReceives(t *testing.T) {
+	sc := NewSyncChannels()
+	sc.Register(make(chan chan struct{})) // Nobody ever reads from this.
+
+	before := runtime.NumGoroutine()
+	total, ok, err := sc.Sync(smallTimeout)
+	if !errors.Is(err, ErrTimeout) {
+		t.Fatalf("Sync() error = %v, want ErrTimeout", err)
+	}
+	if total != 1 || ok != 0 {
+		t.Fatalf("Sync() returned total=%d, ok=%d; want 1,0", total, ok)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for runtime.NumGoroutine() > before {
+		if time.Now().After(deadline) {
+			t.Fatalf("goroutines leaked after Sync() timed out: before=%d, after=%d",
+				before, runtime.NumGoroutine())
+		}
+		time.Sleep(shortDelay)
 	}
 }
 
