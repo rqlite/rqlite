@@ -4,6 +4,7 @@
 - [PR #3005](https://github.com/rqlite/rqlite/pull/3005): Support CMEK for automatic backups to Google Cloud Storage.
 
 ### Implementation changes and bug fixes
+- [PR #3017](https://github.com/rqlite/rqlite/pull/3017): Return the correct elapsed time for HTTP database loads requested with timings.
 - [PR #3013](https://github.com/rqlite/rqlite/pull/3013): Avoid creating Raft state when checking an empty data directory for automatic restore.
 - [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
 - [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Accept extension tarballs whose entries are prefixed with `./`.
