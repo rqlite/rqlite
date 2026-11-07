@@ -304,7 +304,9 @@ func MakeDSN(path string, readOnly, fkEnabled, walEnabled bool) string {
 		opts.Set("_journal", "DELETE")
 	}
 	opts.Add("_sync", "0")
-	return fmt.Sprintf("file:%s?%s", path, opts.Encode())
+	// Escape URI delimiters in filenames so SQLite opens the literal path.
+	uri := url.URL{Path: path}
+	return fmt.Sprintf("file:%s?%s", uri.EscapedPath(), opts.Encode())
 }
 
 // WALPath returns the path to the WAL file for the given database path.
