@@ -127,3 +127,84 @@ func checkFileContent(t *testing.T, path, expectedContent string) {
 		t.Errorf("expected file content %q, got %q", expectedContent, string(data))
 	}
 }
+
+// Test_TarGzip_DotSlashEntries checks that a tarball whose entries are prefixed
+// with "./" -- as produced by "tar czf out.tar.gz -C dir ." -- is treated as a
+// flat archive and extracts cleanly.
+func Test_TarGzip_DotSlashEntries(t *testing.T) {
+	tarGzipFile := filepath.Join(t.TempDir(), "dotslash.tar.gz")
+	createTestTarGzipFileOrdered(t, tarGzipFile, []tarEntry{
+		{name: "./", typeflag: tar.TypeDir, mode: 0755},
+		{name: "./file1.txt", typeflag: tar.TypeReg, mode: 0600, content: "This is file 1"},
+		{name: "./file2.txt", typeflag: tar.TypeReg, mode: 0600, content: "This is file 2"},
+	})
+
+	hasSubdirs, err := TarGzipHasSubdirectories(tarGzipFile)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if hasSubdirs {
+		t.Errorf("expected %s to not have subdirectories", tarGzipFile)
+	}
+
+	extractDir := t.TempDir()
+	if err := UntarGzipToDir(tarGzipFile, extractDir); err != nil {
+		t.Fatalf("unexpected error during extraction: %v", err)
+	}
+	checkFileContent(t, filepath.Join(extractDir, "file1.txt"), "This is file 1")
+	checkFileContent(t, filepath.Join(extractDir, "file2.txt"), "This is file 2")
+}
+
+// Test_UntarGzipToDir_NestedFileWithoutDirEntry checks that a file inside a
+// subdirectory extracts even when the archive carries no entry for the
+// directory itself.
+func Test_UntarGzipToDir_NestedFileWithoutDirEntry(t *testing.T) {
+	tarGzipFile := filepath.Join(t.TempDir(), "nested.tar.gz")
+	createTestTarGzipFileOrdered(t, tarGzipFile, []tarEntry{
+		{name: "sub/dir/file1.txt", typeflag: tar.TypeReg, mode: 0600, content: "This is file 1"},
+	})
+
+	extractDir := t.TempDir()
+	if err := UntarGzipToDir(tarGzipFile, extractDir); err != nil {
+		t.Fatalf("unexpected error during extraction: %v", err)
+	}
+	checkFileContent(t, filepath.Join(extractDir, "sub", "dir", "file1.txt"), "This is file 1")
+}
+
+type tarEntry struct {
+	name     string
+	typeflag byte
+	mode     int64
+	content  string
+}
+
+// createTestTarGzipFileOrdered creates a tar.gz file containing the given
+// entries, in the given order.
+func createTestTarGzipFileOrdered(t *testing.T, tarGzipFile string, entries []tarEntry) {
+	f, err := os.Create(tarGzipFile)
+	if err != nil {
+		t.Fatalf("failed to create tar.gz file: %v", err)
+	}
+	defer f.Close()
+
+	gw := gzip.NewWriter(f)
+	defer gw.Close()
+
+	tw := tar.NewWriter(gw)
+	defer tw.Close()
+
+	for _, e := range entries {
+		hdr := &tar.Header{
+			Name:     e.name,
+			Typeflag: e.typeflag,
+			Mode:     e.mode,
+			Size:     int64(len(e.content)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatalf("failed to write tar header: %v", err)
+		}
+		if _, err := tw.Write([]byte(e.content)); err != nil {
+			t.Fatalf("failed to write tar content: %v", err)
+		}
+	}
+}

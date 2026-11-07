@@ -59,16 +59,6 @@ func (p *pool) busyTimeout() (int, error) {
 	return conn.BusyTimeout()
 }
 
-// setBusyTimeout sets the busy timeout on a connection from the pool.
-func (p *pool) setBusyTimeout(ms int) error {
-	conn, err := p.acquire(context.Background())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	return conn.SetBusyTimeout(ms)
-}
-
 // pragmas reads the named pragmas on one connection from the pool.
 func (p *pool) pragmas(names []string) (map[string]string, error) {
 	conn, err := p.acquire(context.Background())

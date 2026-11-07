@@ -19,17 +19,28 @@ import (
 )
 
 func Test_DB_BusyTimeout(t *testing.T) {
+	// The driver default applies when no busy timeout is configured.
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer fsutil.Remove(path)
-	defer db.Close()
-
-	wantRw := rand.N(10000)
-	wantRo := rand.N(10000)
-
-	err := db.SetBusyTimeout(wantRw, wantRo)
+	rw, ro, err := db.BusyTimeout()
 	if err != nil {
-		t.Fatalf("failed to set busy_timeout: %s", err.Error())
+		t.Fatalf("failed to get busy_timeout: %s", err.Error())
 	}
+	if rw != 5000 || ro != 5000 {
+		t.Fatalf("want default busy_timeout rw=5000, ro=5000, got rw=%d, ro=%d", rw, ro)
+	}
+	db.Close()
+
+	wantRw := 1 + rand.N(10000)
+	wantRo := 1 + rand.N(10000)
+	cfg := NewConfig(ConnConfig{}, true)
+	cfg.Writer.BusyTimeout = time.Duration(wantRw) * time.Millisecond
+	cfg.Readers.BusyTimeout = time.Duration(wantRo) * time.Millisecond
+	db, err = OpenWithConfig(path, cfg)
+	if err != nil {
+		t.Fatalf("failed to open database: %s", err.Error())
+	}
+	defer db.Close()
 
 	gotRwOnly, err := db.RWBusyTimeout()
 	if err != nil {
@@ -54,6 +65,43 @@ func Test_DB_BusyTimeout(t *testing.T) {
 
 	if gotRw != wantRw || gotRo != wantRo {
 		t.Fatalf("want busy_timeout rw=%d, ro=%d, got rw=%d, ro=%d", wantRw, wantRo, gotRw, gotRo)
+	}
+}
+
+// Test_DB_BusyTimeout_AllReaders tests that the read-only busy timeout reaches
+// every reader connection, including ones opened after the database was.
+func Test_DB_BusyTimeout_AllReaders(t *testing.T) {
+	const wantRo = 5678
+	cfg := NewConfig(ConnConfig{}, true)
+	cfg.Readers.BusyTimeout = wantRo * time.Millisecond
+	path := mustTempFile()
+	defer fsutil.Remove(path)
+	db, err := OpenWithConfig(path, cfg)
+	if err != nil {
+		t.Fatalf("failed to open database: %s", err.Error())
+	}
+	defer db.Close()
+
+	// Hold one reader so the second acquire must open a new connection.
+	r1, err := db.AcquireReader(context.Background())
+	if err != nil {
+		t.Fatalf("failed to acquire first reader: %s", err.Error())
+	}
+	defer r1.Close()
+	r2, err := db.AcquireReader(context.Background())
+	if err != nil {
+		t.Fatalf("failed to acquire second reader: %s", err.Error())
+	}
+	defer r2.Close()
+
+	for i, r := range []*Conn{r1, r2} {
+		got, err := r.BusyTimeout()
+		if err != nil {
+			t.Fatalf("failed to get busy_timeout on reader %d: %s", i+1, err.Error())
+		}
+		if got != wantRo {
+			t.Fatalf("reader %d: want busy_timeout=%d, got %d", i+1, wantRo, got)
+		}
 	}
 }
 

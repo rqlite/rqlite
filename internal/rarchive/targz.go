@@ -57,9 +57,16 @@ func TarGzipHasSubdirectories(path string) (bool, error) {
 			return false, err
 		}
 
+		// Entries are often prefixed with "./" (e.g. "tar czf out.tar.gz -C dir ."),
+		// so clean the name first. An entry for the archive root itself is not
+		// a subdirectory.
+		name := filepath.ToSlash(filepath.Clean(strings.ReplaceAll(header.Name, "\\", "/")))
+		if name == "." {
+			continue
+		}
+
 		// Check if the file is a directory or if the file path includes a subdirectory
-		if header.Typeflag == tar.TypeDir ||
-			strings.Contains(header.Name, "/") || strings.Contains(header.Name, "\\") {
+		if header.Typeflag == tar.TypeDir || strings.Contains(name, "/") {
 			return true, nil
 		}
 	}
@@ -101,6 +108,11 @@ func UntarGzipToDir(path, dir string) error {
 		// Construct the full path for the file
 		fpath := filepath.Join(dir, header.Name)
 
+		// An entry for the archive root itself (e.g. "./") needs nothing created.
+		if fpath == filepath.Clean(dir) {
+			continue
+		}
+
 		// Check for directory traversal vulnerability
 		if !strings.HasPrefix(fpath, filepath.Clean(dir)+string(os.PathSeparator)) {
 			return errors.New("invalid file path")
@@ -112,8 +124,10 @@ func UntarGzipToDir(path, dir string) error {
 				return err
 			}
 		} else {
-			// Create the file
-			if err := os.MkdirAll(filepath.Dir(fpath), os.FileMode(header.Mode)); err != nil {
+			// Create any parent directories the archive did not list explicitly.
+			// The file's own mode is not suitable for a directory, as it may
+			// lack the execute bit needed to create entries within it.
+			if err := os.MkdirAll(filepath.Dir(fpath), 0755); err != nil {
 				return err
 			}
 
