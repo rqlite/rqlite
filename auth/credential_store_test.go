@@ -145,6 +145,42 @@ func Test_AuthLoadMissingFieldsNotInherited(t *testing.T) {
 	}
 }
 
+// Test_AuthLoadNotArray ensures that input which is not exactly one JSON array
+// is rejected, rather than being silently accepted as an empty or truncated
+// set of credentials.
+func Test_AuthLoadNotArray(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		jsonStream string
+	}{
+		{
+			name:       "empty object",
+			jsonStream: `{}`,
+		},
+		{
+			name: "trailing array",
+			jsonStream: `
+			[{"username": "username1", "password": "password1", "perms": ["foo"]}]
+			[{"username": "username2", "password": "password2", "perms": ["all"]}]
+		`,
+		},
+		{
+			name: "trailing garbage",
+			jsonStream: `
+			[{"username": "username1", "password": "password1", "perms": ["foo"]}]
+			garbage
+		`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := NewCredentialsStore()
+			if err := store.Load(strings.NewReader(tc.jsonStream)); err == nil {
+				t.Fatalf("expected error for input that is not a single JSON array")
+			}
+		})
+	}
+}
+
 // Test_AuthLoadDuplicateUsername ensures that a username appearing more than
 // once is rejected, rather than the later entry silently replacing the earlier
 // one's password and permissions.

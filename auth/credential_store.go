@@ -93,9 +93,12 @@ func NewCredentialsStoreFromFile(path string) (*CredentialsStore, error) {
 func (c *CredentialsStore) Load(r io.Reader) error {
 	dec := json.NewDecoder(r)
 	// Read opening bracket.
-	_, err := dec.Token()
+	tok, err := dec.Token()
 	if err != nil {
 		return err
+	}
+	if tok != json.Delim('[') {
+		return fmt.Errorf("expected JSON array, got %v", tok)
 	}
 
 	for dec.More() {
@@ -125,10 +128,15 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 		}
 	}
 
-	// Read closing bracket.
-	_, err = dec.Token()
-	if err != nil {
+	// Read closing bracket, after which there must be nothing else.
+	if _, err = dec.Token(); err != nil {
 		return err
+	}
+	if tok, err := dec.Token(); err != io.EOF {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("unexpected data after credentials array: %v", tok)
 	}
 
 	return nil
