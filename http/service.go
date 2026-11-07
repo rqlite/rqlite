@@ -902,9 +902,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 	}
 
 	resp := NewResponse()
-	defer func() {
-		resp.end = time.Now()
-	}()
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -946,6 +943,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		}
 	}
 
+	resp.end = time.Now()
 	s.writeResponse(w, qp, resp)
 }
 
