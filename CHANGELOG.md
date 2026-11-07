@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
 - [PR #3006](https://github.com/rqlite/rqlite/pull/3006): Reject duplicate usernames in auth config and require an actual JSON array.
+- [PR #XXX](https://github.com/rqlite/rqlite/pull/XXX): Apply the configured busy timeout to every pooled reader connection, not just the one borrowed when it was set.
 
 ## v10.6.6 (October 28th 2026)
 ### Implementation changes and bug fixes
