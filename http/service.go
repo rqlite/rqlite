@@ -902,9 +902,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 	}
 
 	resp := NewResponse()
-	defer func() {
-		resp.end = time.Now()
-	}()
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -946,6 +943,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		}
 	}
 
+	resp.end = time.Now()
 	s.writeResponse(w, qp, resp)
 }
 
@@ -1282,7 +1280,12 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 			ID string `json:"id"`
 		}
 		if r.Body != nil {
-			if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil {
+			dec := json.NewDecoder(r.Body)
+			if err := dec.Decode(&reqBody); err == nil {
+				if _, err := dec.Token(); err != io.EOF {
+					http.Error(w, "invalid JSON: unexpected data after request", http.StatusBadRequest)
+					return
+				}
 				nodeID = reqBody.ID
 			} else {
 				if err != io.EOF {

@@ -152,6 +152,10 @@ func HasData(dir string) (bool, error) {
 	if len(snaps) > 0 {
 		return true, nil
 	}
+	// Opening a missing database creates it, breaking the definition of a new node.
+	if !fsutil.PathExists(filepath.Join(dir, raftDBPath)) {
+		return false, nil
+	}
 	logs, err := rlog.New(filepath.Join(dir, raftDBPath), false)
 	if err != nil {
 		return false, err
