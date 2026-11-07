@@ -71,8 +71,10 @@ func NewStorageClient(data []byte) (*Config, StorageClient, error) {
 	default:
 		return nil, nil, auto.ErrUnsupportedStorageType
 	}
-
-	return cfg, sc, err
+	if err != nil {
+		return nil, nil, err
+	}
+	return cfg, sc, nil
 }
 
 // ReadConfigFile reads the config file and returns the data. It also expands

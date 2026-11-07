@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -29,6 +30,9 @@ var (
 
 	// GCPGCSIDKey is the GCS object metadata key under which the backup ID is stored.
 	GCPGCSIDKey = "rqlite-auto-backup-id"
+
+	// ErrInvalidKMSKeyName is returned when the Cloud KMS key name is not valid.
+	ErrInvalidKMSKeyName = errors.New("invalid Cloud KMS key name")
 )
 
 // TimestampedPath returns a new path with the given timestamp prepended.
@@ -46,6 +50,11 @@ type GCSConfig struct {
 	Bucket          string `json:"bucket"`
 	Name            string `json:"name"`
 	CredentialsPath string `json:"credentials_path"`
+
+	// KMSKeyName is the Cloud KMS key GCS uses to encrypt uploaded objects, of
+	// the form projects/P/locations/L/keyRings/R/cryptoKeys/K. If empty, the
+	// bucket's default encryption applies.
+	KMSKeyName string `json:"kms_key_name,omitempty"`
 }
 
 // GCSClient is a client for uploading data to Google Cloud Storage (GCS).
@@ -74,6 +83,9 @@ type GCSClientOpts struct {
 func NewGCSClient(cfg *GCSConfig, opts *GCSClientOpts) (*GCSClient, error) {
 	if cfg.Endpoint == "" {
 		cfg.Endpoint = defaultEndpoint
+	}
+	if err := validateKMSKeyName(cfg.KMSKeyName); err != nil {
+		return nil, err
 	}
 	sa, err := loadServiceAccount(cfg.CredentialsPath)
 	if err != nil {
@@ -184,6 +196,9 @@ func (g *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 	}
 
 	u := g.uploadURL + "?uploadType=multipart"
+	if g.cfg.KMSKeyName != "" {
+		u += "&kmsKeyName=" + url.QueryEscape(g.cfg.KMSKeyName)
+	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, u, &buf)
 	req.Header.Set("Content-Type", "multipart/related; boundary="+w.Boundary())
 	if err := g.addAuth(req); err != nil {
@@ -286,6 +301,25 @@ func (g *GCSClient) CurrentID(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("ID key (%s) not found in metadata %v", GCPGCSIDKey, g)
 	}
 	return id, nil
+}
+
+// validateKMSKeyName checks that name is empty or a Cloud KMS key resource
+// name of the form projects/P/locations/L/keyRings/R/cryptoKeys/K. GCS always
+// encrypts with the key's primary version, so a key version is not accepted.
+func validateKMSKeyName(name string) error {
+	if name == "" {
+		return nil
+	}
+	parts := strings.Split(name, "/")
+	if len(parts) != 8 {
+		return fmt.Errorf("%w: %q", ErrInvalidKMSKeyName, name)
+	}
+	for i, label := range []string{"projects", "locations", "keyRings", "cryptoKeys"} {
+		if parts[2*i] != label || parts[2*i+1] == "" {
+			return fmt.Errorf("%w: %q", ErrInvalidKMSKeyName, name)
+		}
+	}
+	return nil
 }
 
 func (g *GCSClient) addAuth(req *http.Request) error {

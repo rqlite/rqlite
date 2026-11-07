@@ -204,6 +204,45 @@ func Test_NewStorageClient(t *testing.T) {
 			expectedErr:    nil,
 		},
 		{
+			name: "ValidGCSConfigKMSKeyName",
+			input: fmt.Appendf(nil, `{
+				           "version": 1,
+				           "type": "gcs",
+				           "interval": "24h",
+				           "sub": {
+				               "bucket": "test_bucket",
+				               "name": "test/path",
+				               "project_id": "test_project",
+				               "credentials_path": %q,
+				               "kms_key_name": "projects/test_project/locations/us/keyRings/ring/cryptoKeys/key"
+				           }
+				       }`, gcsCredsFile),
+			expectedCfg: &Config{
+				Version:  1,
+				Type:     "gcs",
+				Interval: 24 * auto.Duration(time.Hour),
+			},
+			expectedClient: mustNewGCSClient(t, "test_bucket", "test/path", "test_project", gcsCredsFile),
+			expectedErr:    nil,
+		},
+		{
+			name: "InvalidGCSConfigKMSKeyName",
+			input: fmt.Appendf(nil, `{
+				           "version": 1,
+				           "type": "gcs",
+				           "interval": "24h",
+				           "sub": {
+				               "bucket": "test_bucket",
+				               "name": "test/path",
+				               "project_id": "test_project",
+				               "credentials_path": %q,
+				               "kms_key_name": "my-key"
+				           }
+				       }`, gcsCredsFile),
+			expectedCfg: nil,
+			expectedErr: gcp.ErrInvalidKMSKeyName,
+		},
+		{
 			name: "ValidFileConfig",
 			input: []byte(`
 			{
