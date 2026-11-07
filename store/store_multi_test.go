@@ -2259,8 +2259,9 @@ func Test_MultiNodeExecuteQuery_Linearizable_Concurrent(t *testing.T) {
 }
 
 // Test_MultiNodeRequest_AutoLevel checks that a Request at AUTO read consistency
-// is handled using the level AUTO resolves to. On a voting follower AUTO means
-// WEAK, so the follower must refuse the read, just as Query does.
+// is handled using the level AUTO resolves to. On a Follower Store AUTO means
+// WEAK, so that Store must refuse the read (so caller can redirect to Leader),
+// just as Query does.
 func Test_MultiNodeRequest_AutoLevel(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
@@ -2296,13 +2297,13 @@ func Test_MultiNodeRequest_AutoLevel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on leader: %s", err.Error())
 	}
-	// The follower must hold the table, so that the read is classified as read-only
+	// The follower Store must hold the table, so that the read is classified as read-only
 	// there rather than being refused as a write.
 	testPoll(t, func() bool {
 		return idx <= s1.DBAppliedIndex()
 	}, 100*time.Millisecond, 5*time.Second)
 
-	// The leader serves an AUTO read.
+	// The leader Store serves an AUTO read.
 	eqr := executeQueryRequestFromString("SELECT * FROM foo", proto.ConsistencyLevel_AUTO,
 		false, false, false)
 	eqresp, _, _, err := s0.Request(context.Background(), eqr)
@@ -2313,7 +2314,7 @@ func Test_MultiNodeRequest_AutoLevel(t *testing.T) {
 		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Query on the voting follower refuses the read, and Request must agree.
+	// Query on the voting follower Store refuses the read, and Request must agree.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_AUTO
 	if _, _, _, err := s1.Query(context.Background(), qr); !errors.Is(err, ErrNotLeader) {
