@@ -14,6 +14,8 @@ import (
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/random"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 // Test_OpenNonExistentDatabase tests that opening a nonexistent database
@@ -1709,7 +1711,7 @@ func Test_TransactionTimeout_AutoCheckpointDisabled(t *testing.T) {
 func Test_TransactionTimeout_HooksRetained(t *testing.T) {
 	var commits int
 	cfg := NewConfig(ConnConfig{
-		CommitHook: func() bool {
+		CommitHook: func(*sqlite3.SQLiteConn) bool {
 			commits++
 			return true
 		},

@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/db/wal"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
@@ -503,7 +506,7 @@ func Test_CheckpointManager_Checkpoint_WALReset_Detected(t *testing.T) {
 	// First checkpoint: pnCkpt == pnLog, no truncate. Manager records
 	// nextFrameIdx > 0 and the current salt for the next round.
 	var buf bytes.Buffer
-	meta, _, err := cm.Checkpoint(&buf, 100*time.Millisecond)
+	meta, n, err := cm.Checkpoint(&buf, 100*time.Millisecond)
 	if err != nil {
 		t.Fatalf("first checkpoint: unexpected error: %s", err.Error())
 	}
@@ -518,6 +521,14 @@ func Test_CheckpointManager_Checkpoint_WALReset_Detected(t *testing.T) {
 	}
 	if cm.resetWatch.resumeFrameIdx == 0 {
 		t.Fatalf("first checkpoint: expected resumeFrameIdx > 0 (pnCkpt == pnLog path), got 0 (meta=%s)", meta)
+	}
+	// Every page was moved but the WAL was not truncated, so the compacted
+	// WAL went to the writer and its size must be reported.
+	if buf.Len() == 0 {
+		t.Fatal("first checkpoint: expected compacted WAL data to be written")
+	}
+	if int(n) != buf.Len() {
+		t.Fatalf("first checkpoint: expected %d compacted WAL bytes to be reported, got %d", buf.Len(), n)
 	}
 
 	// Release the reader. The previous checkpoint moved all frames to the
@@ -562,5 +573,229 @@ func Test_CheckpointManager_Close(t *testing.T) {
 
 	if err := cm.Close(); err != nil {
 		t.Fatalf("expected Close() to return nil, got %s", err.Error())
+	}
+}
+
+// Test_CheckpointManager_Checkpoint_RolledBackFrames tests that a checkpoint
+// handles a WAL which has frames after its last commit frame. SQLite may write
+// a transaction's frames to the WAL before the transaction commits, and if the
+// transaction is then rolled back those frames stay in the WAL after the last
+// commit frame. A smaller committed transaction that follows overwrites only
+// some of them. The compacted WAL must carry just the committed change.
+func Test_CheckpointManager_Checkpoint_RolledBackFrames(t *testing.T) {
+	path := mustTempFile()
+	defer RemoveFiles(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+	mustExecute(db, `CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+
+	// Checkpoint the table creation, so the test starts from a WAL with no
+	// frames in it, and keep a copy of the database as it stands now. The
+	// compacted WAL produced later is replayed against that copy.
+	cm, err := NewCheckpointManager(db)
+	if err != nil {
+		t.Fatalf("failed to create checkpoint manager: %s", err.Error())
+	}
+	if _, _, err := cm.Checkpoint(nil, 5*time.Second); err != nil {
+		t.Fatalf("failed to checkpoint: %s", err.Error())
+	}
+	base := mustTempFile()
+	defer RemoveFiles(base)
+	mustCopyFile(base, path)
+
+	// Put frames into the WAL that belong to no committed transaction. A
+	// transaction inserts 1000 rows, which take ids 1 to 1000, and then
+	// inserts id 1 again. That last statement fails, so the whole transaction
+	// is rolled back. The PRAGMA makes SQLite write the transaction's frames to
+	// the WAL before it commits, so the rollback leaves them in the WAL with no
+	// commit frame after them.
+	mustExecute(db, "PRAGMA cache_size=5")
+	stmts := make([]*command.Statement, 0, 1001)
+	for i := range 1000 {
+		stmts = append(stmts, &command.Statement{Sql: fmt.Sprintf("INSERT INTO foo(name) VALUES('%0500d')", i)})
+	}
+	stmts = append(stmts, &command.Statement{Sql: "INSERT INTO foo(id, name) VALUES(1, 'dup')"})
+	results, err := db.Execute(&command.Request{Transaction: true, Statements: stmts}, false)
+	if err != nil {
+		t.Fatalf("failed to execute transaction: %s", err.Error())
+	}
+	if results[len(results)-1].GetE().GetError() == "" {
+		t.Fatal("expected the last statement of the transaction to fail")
+	}
+
+	// Commit one small transaction. SQLite writes it where the rolled-back
+	// transaction's frames begin, so it overwrites the first of them and its
+	// commit frame is followed by the rest. The row takes id 1, since the
+	// rollback left the table empty.
+	mustExecute(db, `INSERT INTO foo(name) VALUES('fiona')`)
+
+	// The checkpoint must compact the WAL by ignoring the frames after the
+	// commit frame, and then succeed.
+	var buf bytes.Buffer
+	meta, n, err := cm.Checkpoint(&buf, 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to checkpoint: %s", err.Error())
+	}
+	if !meta.Success() {
+		t.Fatalf("expected checkpoint to succeed, got meta=%s", meta)
+	}
+	if n == 0 || int(n) != buf.Len() {
+		t.Fatalf("expected %d compacted WAL bytes to be reported, got %d", buf.Len(), n)
+	}
+
+	// Replay the compacted WAL against the copy. It must carry only the
+	// committed transaction, so the copy must then hold only that row.
+	if err := os.WriteFile(base+"-compacted", buf.Bytes(), 0644); err != nil {
+		t.Fatalf("failed to write compacted WAL: %s", err.Error())
+	}
+	if err := ReplayWAL(base, []string{base + "-compacted"}, false); err != nil {
+		t.Fatalf("failed to replay compacted WAL: %s", err.Error())
+	}
+	replayed, err := Open(base, false, true)
+	if err != nil {
+		t.Fatalf("failed to open replayed database: %s", err.Error())
+	}
+	defer replayed.Close()
+	rows := mustQuery(replayed, "SELECT id, name FROM foo")
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected rows after replay: got %s, want %s", got, exp)
+	}
+}
+
+// Test_CheckpointManager_Checkpoint_RolledBackFrames_Resume tests a checkpoint
+// which resumes part-way through the WAL at the slot where a rolled-back
+// transaction's frames begin. A reader blocks truncation, so the first
+// checkpoint leaves the manager resuming at the slot after the last commit
+// frame. A transaction then rolls back, leaving its frames from that slot on.
+// A checkpoint with nothing committed after them must ignore them. After a
+// commit overwrites the first of them, the checkpoint must carry that commit
+// and ignore the rest.
+func Test_CheckpointManager_Checkpoint_RolledBackFrames_Resume(t *testing.T) {
+	path := mustTempFile()
+	defer RemoveFiles(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+	mustExecute(db, `CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+
+	cm, err := NewCheckpointManager(db)
+	if err != nil {
+		t.Fatalf("failed to create checkpoint manager: %s", err.Error())
+	}
+	if _, _, err := cm.Checkpoint(nil, 5*time.Second); err != nil {
+		t.Fatalf("failed to checkpoint: %s", err.Error())
+	}
+
+	// Keep a copy of the database as it is before the writes, to replay the
+	// compacted WALs against later.
+	base := mustTempFile()
+	defer RemoveFiles(base)
+	mustCopyFile(base, path)
+	mustExecute(db, `INSERT INTO foo(name) VALUES('fiona')`)
+
+	// A reader which blocks truncation. It starts after the write, so its
+	// snapshot includes every frame and the checkpoint can move every page.
+	qr := &command.Request{
+		Statements: []*command.Statement{{Sql: "SELECT * FROM foo", ForceStall: true}},
+	}
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	readerDone := make(chan struct{})
+	go func() {
+		defer close(readerDone)
+		db.QueryWithContext(ctx, qr, false)
+	}()
+	time.Sleep(2 * time.Second)
+
+	var bufA bytes.Buffer
+	meta, _, err := cm.Checkpoint(&bufA, 100*time.Millisecond)
+	if err != nil {
+		t.Fatalf("failed to checkpoint with reader open: %s", err.Error())
+	}
+	if meta.Success() || meta.Moved != meta.Pages {
+		t.Fatalf("expected a checkpoint which moved every page but did not truncate, got meta=%s", meta)
+	}
+	resumeIdx := cm.resetWatch.resumeFrameIdx
+	if resumeIdx == 0 {
+		t.Fatal("expected the checkpoint manager to resume part-way through the WAL")
+	}
+
+	// Have SQLite write the transaction's frames to the WAL before the
+	// transaction commits, so that rolling it back leaves them in the WAL.
+	// They begin at the resume slot, with no commit frame after them. The
+	// checkpoint must ignore them, carry no frames, and leave the resume slot
+	// where it was.
+	mustExecute(db, "PRAGMA cache_size=5")
+	stmts := make([]*command.Statement, 0, 1001)
+	for i := range 1000 {
+		stmts = append(stmts, &command.Statement{Sql: fmt.Sprintf("INSERT INTO foo(name) VALUES('%0500d')", i)})
+	}
+	stmts = append(stmts, &command.Statement{Sql: "INSERT INTO foo(id, name) VALUES(1, 'dup')"})
+	results, err := db.Execute(&command.Request{Transaction: true, Statements: stmts}, false)
+	if err != nil {
+		t.Fatalf("failed to execute transaction: %s", err.Error())
+	}
+	if results[len(results)-1].GetE().GetError() == "" {
+		t.Fatal("expected the last statement of the transaction to fail")
+	}
+	var bufB bytes.Buffer
+	meta, _, err = cm.Checkpoint(&bufB, 100*time.Millisecond)
+	if err != nil {
+		t.Fatalf("failed to checkpoint with rolled-back frames at the resume slot: %s", err.Error())
+	}
+	if meta.Success() || meta.Moved != meta.Pages {
+		t.Fatalf("expected a checkpoint which moved every page but did not truncate, got meta=%s", meta)
+	}
+	if bufB.Len() != wal.WALHeaderSize {
+		t.Fatalf("expected a compacted WAL with no frames, got %d bytes", bufB.Len())
+	}
+	if cm.resetWatch.resumeFrameIdx != resumeIdx {
+		t.Fatalf("rolled-back frames moved the resume slot from %d to %d", resumeIdx, cm.resetWatch.resumeFrameIdx)
+	}
+
+	// A commit overwrites the first of the rolled-back frames. It happens while
+	// the reader still holds its mark, so SQLite appends to the WAL rather than
+	// restarting it. Once the reader is gone, the checkpoint resumes at the
+	// same slot, must carry that commit, ignore the rolled-back frames after
+	// it, and truncate the WAL.
+	mustExecute(db, `INSERT INTO foo(name) VALUES('declan')`)
+	cancelFunc()
+	<-readerDone
+	var bufC bytes.Buffer
+	meta, _, err = cm.Checkpoint(&bufC, 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to checkpoint after a commit over rolled-back frames: %s", err.Error())
+	}
+	if !meta.Success() {
+		t.Fatalf("expected checkpoint to succeed, got meta=%s", meta)
+	}
+
+	// Replay the two compacted WALs which carry frames against the copy, which
+	// must then hold exactly the committed rows.
+	walA, walC := base+"-a", base+"-c"
+	if err := os.WriteFile(walA, bufA.Bytes(), 0644); err != nil {
+		t.Fatalf("failed to write compacted WAL: %s", err.Error())
+	}
+	if err := os.WriteFile(walC, bufC.Bytes(), 0644); err != nil {
+		t.Fatalf("failed to write compacted WAL: %s", err.Error())
+	}
+	if err := ReplayWAL(base, []string{walA, walC}, false); err != nil {
+		t.Fatalf("failed to replay compacted WALs: %s", err.Error())
+	}
+	replayed, err := Open(base, false, true)
+	if err != nil {
+		t.Fatalf("failed to open replayed database: %s", err.Error())
+	}
+	defer replayed.Close()
+	rows := mustQuery(replayed, "SELECT id, name FROM foo")
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"declan"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected rows after replay: got %s, want %s", got, exp)
 	}
 }

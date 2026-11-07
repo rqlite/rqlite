@@ -178,6 +178,52 @@ func Test_NewStorageClient(t *testing.T) {
 			expectedErr:    nil,
 		},
 		{
+			name: "ValidS3ConfigServerSideEncryption",
+			input: []byte(`
+			{
+				"version": 1,
+				"type": "s3",
+				"interval": "24h",
+				"sub": {
+					"access_key_id": "test_id",
+					"secret_access_key": "test_secret",
+					"region": "us-west-2",
+					"bucket": "test_bucket",
+					"path": "test/path",
+					"server_side_encryption": "aws:kms",
+					"sse_kms_key_id": "alias/backups"
+				}
+			}
+			`),
+			expectedCfg: &Config{
+				Version:  1,
+				Type:     "s3",
+				Interval: 24 * auto.Duration(time.Hour),
+			},
+			expectedClient: mustNewS3Client(t, "", "us-west-2", "test_id", "test_secret", "test_bucket", "test/path"),
+			expectedErr:    nil,
+		},
+		{
+			name: "InvalidS3ConfigServerSideEncryption",
+			input: []byte(`
+			{
+				"version": 1,
+				"type": "s3",
+				"interval": "24h",
+				"sub": {
+					"access_key_id": "test_id",
+					"secret_access_key": "test_secret",
+					"region": "us-west-2",
+					"bucket": "test_bucket",
+					"path": "test/path",
+					"server_side_encryption": "rot13"
+				}
+			}
+			`),
+			expectedCfg: nil,
+			expectedErr: aws.ErrInvalidServerSideEncryption,
+		},
+		{
 			name: "ValidGCSConfig",
 			input: fmt.Appendf(nil, `{
 				           "version": 1,

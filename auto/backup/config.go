@@ -43,8 +43,10 @@ func NewStorageClient(data []byte) (*Config, StorageClient, error) {
 			return nil, nil, err
 		}
 		opts := &aws.S3ClientOpts{
-			ForcePathStyle: s3cfg.ForcePathStyle,
-			Timestamp:      cfg.Timestamp,
+			ForcePathStyle:       s3cfg.ForcePathStyle,
+			Timestamp:            cfg.Timestamp,
+			ServerSideEncryption: s3cfg.ServerSideEncryption,
+			SSEKMSKeyID:          s3cfg.SSEKMSKeyID,
 		}
 		sc, err = aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
 			s3cfg.Bucket, s3cfg.Path, opts)

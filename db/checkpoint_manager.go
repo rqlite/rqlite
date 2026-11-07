@@ -106,9 +106,10 @@ func (m *CheckpointManagerMeta) String() string {
 // Checkpoint performs a checkpoint(TRUNCATE) of the database.
 //
 // If w is non-nil Checkpoint writes a compacted copy of the WAL to the given writer
-// before performing the checkpoint. The checkpoint operation will block for at most
-// the given timeout duration. If the checkpoint operation fails to complete within
-// the timeout, an error is returned.
+// before performing the checkpoint, and returns the number of bytes written whenever
+// it returns no error. The checkpoint operation will block for at most the given
+// timeout duration. If the checkpoint operation fails to complete within the
+// timeout, an error is returned.
 func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*CheckpointManagerMeta, int64, error) {
 	stats.Add(numCheckpointTotal, 1)
 
@@ -211,7 +212,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 		// values, so arm the watch with the salt and resume frame we will need.
 		stats.Add(numCheckpointPartial, 1)
 		cm.resetWatch.Arm(preChkSalt, int64(pnCkpt))
-		return mmeta, 0, nil
+		return mmeta, n, nil
 	}
 	stats.Add(numCheckpointInvariantErrors, 1)
 	return mmeta, 0, ErrDatabaseCheckpointInvariant
