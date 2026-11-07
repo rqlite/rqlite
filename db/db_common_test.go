@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -125,6 +126,33 @@ func Test_DB_CompileOptions(t *testing.T) {
 			t.Fatalf("%s not present in compile options", o)
 		}
 	}
+}
+
+// Test_DB_CompileOptions_Concurrent tests that the compile options can be
+// fetched by concurrent callers, as they are when the status of a node is
+// requested more than once at a time.
+func Test_DB_CompileOptions_Concurrent(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer fsutil.Remove(path)
+	defer db.Close()
+
+	// Make every caller read the options from the database.
+	compileOptions = nil
+
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			opts, err := db.CompileOptions()
+			if err != nil {
+				t.Errorf("failed to retrieve compilation options: %s", err.Error())
+			} else if len(opts) == 0 {
+				t.Error("no compile options returned")
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func Test_DB_SetSynchronousMode(t *testing.T) {
@@ -2844,6 +2872,43 @@ func Test_DB_DumpSelectedTables(t *testing.T) {
 	}
 	if s := asJSON(gotRows); s != expRows {
 		t.Fatalf("rows of a filtered dump: got %s want %s", s, expRows)
+	}
+}
+
+// Test_DB_DumpSelectedTables_Case tests that a table is selected for a dump
+// whatever the case its name is given in. SQLite treats table names in SQL
+// statements as case-insensitive, so "T1" refers to a table created as "t1",
+// and the dump must select tables the same way. Otherwise the dump carries the
+// table's indexes and triggers without the table, and cannot be loaded.
+func Test_DB_DumpSelectedTables_Case(t *testing.T) {
+	db, path := mustCreateDumpSchemaFixture(t)
+	defer fsutil.Remove(path)
+	defer db.Close()
+
+	var buf strings.Builder
+	if _, err := db.Dump(&buf, "T1"); err != nil {
+		t.Fatalf("dump T1: %s", err.Error())
+	}
+
+	newDB, newPath := mustCreateOnDiskDatabase()
+	defer fsutil.Remove(newPath)
+	defer newDB.Close()
+
+	resps, err := newDB.ExecuteStringStmt(buf.String())
+	if err != nil {
+		t.Fatalf("loading dump: %s", err.Error())
+	}
+	for _, r := range resps {
+		if r.GetE().GetError() != "" {
+			t.Fatalf("loading dump: %s", r.GetE().GetError())
+		}
+	}
+
+	expObjects := `[{"columns":["obj"],"types":["text"],"values":[["index:idx_t1_name"],["table:t1"],["trigger:trg_t1"],["view:v_t1_t2"]]}]`
+	rows := mustQuery(newDB, `SELECT "type" || ':' || "name" AS obj FROM "sqlite_master"
+							  WHERE "sql" NOT NULL AND "name" NOT LIKE 'sqlite_%' ORDER BY obj`)
+	if got := asJSON(rows); got != expObjects {
+		t.Fatalf("schema objects of a filtered dump:\ngot  %s\nwant %s", got, expObjects)
 	}
 }
 

@@ -796,10 +796,17 @@ func (db *DB) WALPath() string {
 	return db.walPath
 }
 
-var compileOptions []string // Memoized compile options
+// The compile options are those of the SQLite library, so they are the same
+// for every database and are read once.
+var (
+	compileOptionsMu sync.Mutex
+	compileOptions   []string
+)
 
 // CompileOptions returns the SQLite compilation options.
 func (db *DB) CompileOptions() ([]string, error) {
+	compileOptionsMu.Lock()
+	defer compileOptionsMu.Unlock()
 	if compileOptions != nil {
 		return compileOptions, nil
 	}
@@ -811,13 +818,14 @@ func (db *DB) CompileOptions() ([]string, error) {
 		return nil, fmt.Errorf("compile options result wrong size (%d)", len(res))
 	}
 
-	compileOptions = make([]string, len(res[0].Values))
-	for i := range compileOptions {
+	opts := make([]string, len(res[0].Values))
+	for i := range opts {
 		if len(res[0].Values[i].Parameters) != 1 {
 			return nil, fmt.Errorf("compile options values wrong size (%d)", len(res[0].Values[i].Parameters))
 		}
-		compileOptions[i] = res[0].Values[i].Parameters[0].GetS()
+		opts[i] = res[0].Values[i].Parameters[0].GetS()
 	}
+	compileOptions = opts
 	return compileOptions, nil
 }
 

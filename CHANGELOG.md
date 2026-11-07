@@ -10,6 +10,10 @@
 - [PR #3008](https://github.com/rqlite/rqlite/pull/3008): Request reads at `auto` consistency now use the level `auto` resolves correctly.
 - [PR #3008](https://github.com/rqlite/rqlite/pull/3008): Report the Store's `open` status as a boolean, instead of an empty object, in `/status`.
 - [PR #3008](https://github.com/rqlite/rqlite/pull/3008): User-requested snapshot no longer leaves Raft's trailing-logs setting at zero when no snapshot threshold is set.
+- [PR #3009](https://github.com/rqlite/rqlite/pull/3009): Resolve the column names of CDC events for a table created by the same transaction that fills it.
+- [PR #3009](https://github.com/rqlite/rqlite/pull/3009): Match the table names given to a SQL dump regardless of case, so the dump carries the tables along with their indexes and triggers and can be loaded.
+- [PR #3009](https://github.com/rqlite/rqlite/pull/3009): Report the compacted WAL bytes written by a checkpoint which moved every page but could not truncate the WAL.
+- [PR #3009](https://github.com/rqlite/rqlite/pull/3009): Fix a data race when the SQLite compile options are read by concurrent status requests.
 
 ## v10.6.6 (October 28th 2026)
 ### Implementation changes and bug fixes

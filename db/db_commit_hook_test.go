@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 func Test_CommitHook(t *testing.T) {
@@ -18,7 +20,7 @@ func Test_CommitHook(t *testing.T) {
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 
 	count := &atomic.Int32{}
-	hook := func() bool {
+	hook := func(*sqlite3.SQLiteConn) bool {
 		count.Add(1)
 		return true
 	}
@@ -45,7 +47,7 @@ func Test_CommitHook_Rollback(t *testing.T) {
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 
 	count := &atomic.Int32{}
-	hook := func() bool {
+	hook := func(*sqlite3.SQLiteConn) bool {
 		count.Add(1)
 		return false
 	}
@@ -85,7 +87,7 @@ func Test_CommitHook_Tx(t *testing.T) {
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 
 	count := &atomic.Int32{}
-	hook := func() bool {
+	hook := func(*sqlite3.SQLiteConn) bool {
 		count.Add(1)
 		return true
 	}

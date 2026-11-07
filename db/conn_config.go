@@ -169,7 +169,7 @@ func buildConnectHook(cfg *ConnConfig) func(conn *sqlite3.SQLiteConn) error {
 			conn.RegisterUpdateHook(cfg.UpdateHook.SQLite())
 		}
 		if cfg.CommitHook != nil {
-			conn.RegisterCommitHook(cfg.CommitHook.SQLite())
+			conn.RegisterCommitHook(cfg.CommitHook.SQLite(conn))
 		}
 		if cfg.RollbackHook != nil {
 			conn.RegisterRollbackHook(cfg.RollbackHook)
@@ -313,15 +313,17 @@ func (hook *UpdateHookCallback) SQLite() func(int, string, string, int64) {
 type RollbackHookCallback func()
 
 // CommitHookCallback is a callback function that is called whenever a transaction
-// is committed to the database. If the callback returns true the transaction
-// is committed, otherwise it is rolled back.
-type CommitHookCallback func() bool
+// is committed to the database. It is passed the connection committing the
+// transaction. If the callback returns true the transaction is committed,
+// otherwise it is rolled back.
+type CommitHookCallback func(conn *sqlite3.SQLiteConn) bool
 
-// SQLite returns the SQLite commit hook which passes control to hook.
-func (hook *CommitHookCallback) SQLite() func() int {
+// SQLite returns the SQLite commit hook which passes control to hook, along
+// with conn, the connection the hook is registered on.
+func (hook *CommitHookCallback) SQLite(conn *sqlite3.SQLiteConn) func() int {
 	return func() int {
 		stats.Add(numCommitHooks, 1)
-		if (*hook)() {
+		if (*hook)(conn) {
 			return 0
 		}
 		return 1

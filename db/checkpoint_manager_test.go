@@ -503,7 +503,7 @@ func Test_CheckpointManager_Checkpoint_WALReset_Detected(t *testing.T) {
 	// First checkpoint: pnCkpt == pnLog, no truncate. Manager records
 	// nextFrameIdx > 0 and the current salt for the next round.
 	var buf bytes.Buffer
-	meta, _, err := cm.Checkpoint(&buf, 100*time.Millisecond)
+	meta, n, err := cm.Checkpoint(&buf, 100*time.Millisecond)
 	if err != nil {
 		t.Fatalf("first checkpoint: unexpected error: %s", err.Error())
 	}
@@ -518,6 +518,14 @@ func Test_CheckpointManager_Checkpoint_WALReset_Detected(t *testing.T) {
 	}
 	if cm.resetWatch.resumeFrameIdx == 0 {
 		t.Fatalf("first checkpoint: expected resumeFrameIdx > 0 (pnCkpt == pnLog path), got 0 (meta=%s)", meta)
+	}
+	// Every page was moved but the WAL was not truncated, so the compacted
+	// WAL went to the writer and its size must be reported.
+	if buf.Len() == 0 {
+		t.Fatal("first checkpoint: expected compacted WAL data to be written")
+	}
+	if int(n) != buf.Len() {
+		t.Fatalf("first checkpoint: expected %d compacted WAL bytes to be reported, got %d", buf.Len(), n)
 	}
 
 	// Release the reader. The previous checkpoint moved all frames to the
