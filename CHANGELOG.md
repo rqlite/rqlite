@@ -4,7 +4,7 @@
 - [PR #3005](https://github.com/rqlite/rqlite/pull/3005): Support CMEK for automatic backups to Google Cloud Storage.
 
 ### Implementation changes and bug fixes
-- [PR #3022](https://github.com/rqlite/rqlite/pull/3022): Leave credentials and permissions unchanged when loading an invalid auth configuration.
+- [PR #3022](https://github.com/rqlite/rqlite/pull/3022): Replace credentials and permissions only after validating the complete auth configuration, leaving the store unchanged on failure.
 - [PR #3017](https://github.com/rqlite/rqlite/pull/3017): Return the correct elapsed time for HTTP database loads requested with timings.
 - [PR #3013](https://github.com/rqlite/rqlite/pull/3013): Avoid creating Raft state when checking an empty data directory for automatic restore.
 - [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.

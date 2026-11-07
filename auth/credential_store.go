@@ -89,8 +89,8 @@ func NewCredentialsStoreFromFile(path string) (*CredentialsStore, error) {
 	return c, c.Load(f)
 }
 
-// Load adds credential information from a reader. If validation fails, the
-// existing credentials and permissions are left unchanged.
+// Load replaces all credentials and permissions with those read from r.
+// If validation fails, the existing credentials and permissions are left unchanged.
 func (c *CredentialsStore) Load(r io.Reader) error {
 	dec := json.NewDecoder(r)
 	// Read opening bracket.
@@ -120,9 +120,6 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 		if len(cred.Perms) == 0 {
 			return fmt.Errorf("no permissions specified for username %s", cred.Username)
 		}
-		if _, ok := c.store[cred.Username]; ok {
-			return fmt.Errorf("duplicate username %s", cred.Username)
-		}
 		if _, ok := pending.store[cred.Username]; ok {
 			return fmt.Errorf("duplicate username %s", cred.Username)
 		}
@@ -144,10 +141,8 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 		return fmt.Errorf("unexpected data after credentials array: %v", tok)
 	}
 
-	for username, password := range pending.store {
-		c.store[username] = password
-		c.perms[username] = pending.perms[username]
-	}
+	c.store = pending.store
+	c.perms = pending.perms
 	return nil
 }
 
