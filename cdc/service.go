@@ -97,6 +97,10 @@ const (
 	leaderChanLen = 5 // Support any fast back-to-back leadership changes.
 
 	retryForever = -1
+
+	// shutdownFlushTimeout bounds how long Stop waits for the final batch
+	// of events to be persisted to the FIFO.
+	shutdownFlushTimeout = 10 * time.Second
 )
 
 const (
@@ -225,9 +229,11 @@ type Service struct {
 	hwmObCh chan uint64
 
 	// For CDC shutdown.
-	wg      sync.WaitGroup
-	done    chan struct{}
-	started rsync.AtomicBool
+	wg             sync.WaitGroup
+	done           chan struct{}
+	batcherStop    chan struct{}
+	batcherDrained chan struct{}
+	started        rsync.AtomicBool
 
 	// For white box testing
 	hwmLeaderUpdated   atomic.Uint64
@@ -278,6 +284,8 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 		snapshotCh:            make(chan chan struct{}),
 		hwmObCh:               make(chan uint64, leaderChanLen),
 		done:                  make(chan struct{}),
+		batcherStop:           make(chan struct{}),
+		batcherDrained:        make(chan struct{}),
 		logger:                log.New(os.Stderr, "[cdc-service] ", log.LstdFlags),
 	}
 
@@ -348,11 +356,19 @@ func (s *Service) Start() (retErr error) {
 	return nil
 }
 
-// Stop stops the CDC service.
+// Stop stops the CDC service. Any events still buffered on the input channel
+// or held by the batcher are flushed to the FIFO before Stop returns, so a
+// clean shutdown does not lose events the database has already committed.
+//
+// Stop must only be called after the source of events (the Store, in
+// practice) has been shut down. Otherwise the drain may miss events, and an
+// undrained input channel can stall the FSM once its buffer fills.
 func (s *Service) Stop() {
 	if s.started.IsNot() {
 		return
 	}
+	close(s.batcherStop)
+	<-s.batcherDrained
 	close(s.done)
 	s.wg.Wait()
 	s.fifo.Close()
@@ -514,11 +530,13 @@ func (s *Service) mainLoop() {
 // is running on the leader or a follower.
 func (s *Service) writeToBatcher() {
 	defer s.wg.Done()
+	defer close(s.batcherDrained)
 	for {
 		select {
 		case o := <-s.in:
 			if o == nil {
-				// Channel closed, exiting goroutine.
+				// Channel closed, flush anything pending and exit.
+				s.flushBatcher()
 				return
 			}
 			if o.Index != 0 && o.Index <= s.highWatermark.Load() {
@@ -557,9 +575,61 @@ func (s *Service) writeToBatcher() {
 				case <-s.done: // Or detect we're shutting down.
 				}
 			}()
-		case <-s.done:
+		case <-s.batcherStop:
+			// Shutdown requested. The event source is down, so nothing new
+			// can arrive on s.in. Drain whatever is still buffered, flush it
+			// to the FIFO, and only then exit.
+			s.drainInput()
 			return
 		}
+	}
+}
+
+// drainInput reads any events still buffered on the input channel into the
+// batcher, then flushes the batcher so the events reach the FIFO.
+func (s *Service) drainInput() {
+	for {
+		select {
+		case o := <-s.in:
+			if o == nil {
+				s.flushBatcher()
+				return
+			}
+			if o.Index != 0 && o.Index <= s.highWatermark.Load() {
+				stats.Add(numBatcherWriteIgnored, 1)
+				continue
+			}
+			if _, err := s.batcher.WriteOne(o, nil); err != nil {
+				s.logger.Printf("error writing CDC events to batcher during drain: %v", err)
+			} else {
+				s.writesToBatcher.Add(1)
+				stats.Add(numBatcherWrites, 1)
+				stats.Add(numBatcherEventsWrite, int64(len(o.Events)))
+			}
+		default:
+			// Input channel is empty.
+			s.flushBatcher()
+			return
+		}
+	}
+}
+
+// flushBatcher appends a flush marker to the batcher and waits until the
+// batch containing it has been persisted to the FIFO by the main loop.
+func (s *Service) flushBatcher() {
+	evg := &proto.CDCIndexedEventGroup{
+		Flush: true,
+	}
+	fc := make(queue.FlushChannel)
+	if _, err := s.batcher.WriteOne(evg, fc); err != nil {
+		s.logger.Printf("error writing CDC flush event to batcher: %v", err)
+		return
+	}
+	s.batcher.Flush()
+	select {
+	case <-fc: // Wait for the main loop to write the batch to BoltDB.
+	case <-time.After(shutdownFlushTimeout):
+		s.logger.Printf("timed out waiting for final CDC batch to persist to FIFO")
 	}
 }
 
