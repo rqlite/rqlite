@@ -4,6 +4,8 @@ import (
 	"compress/gzip"
 	"io"
 	"os"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // Gzip compresses the given file and returns the path to the
@@ -25,11 +27,13 @@ func Gzip(file string) (string, error) {
 	gz := gzip.NewWriter(tmpFd)
 	_, err = io.Copy(gz, f)
 	if err != nil {
+		fsutil.Remove(tmpFd.Name())
 		return "", err
 	}
 
 	err = gz.Close()
 	if err != nil {
+		fsutil.Remove(tmpFd.Name())
 		return "", err
 	}
 	return tmpFd.Name(), nil
@@ -59,6 +63,7 @@ func Gunzip(file string) (string, error) {
 
 	_, err = io.Copy(tmpFd, gz)
 	if err != nil {
+		fsutil.Remove(tmpFd.Name())
 		return "", err
 	}
 	return tmpFd.Name(), nil
