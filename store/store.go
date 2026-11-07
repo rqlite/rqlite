@@ -877,15 +877,8 @@ func (s *Store) Open() (retErr error) {
 // Bootstrap executes a cluster bootstrap on this node, using the given
 // Servers as the configuration.
 func (s *Store) Bootstrap(servers ...*Server) error {
-	raftServers := make([]raft.Server, len(servers))
-	for i := range servers {
-		raftServers[i] = raft.Server{
-			ID:      raft.ServerID(servers[i].ID),
-			Address: raft.ServerAddress(servers[i].Addr),
-		}
-	}
 	fut := s.raft.BootstrapCluster(raft.Configuration{
-		Servers: raftServers,
+		Servers: Servers(servers).RaftServers(),
 	})
 	return fut.Error()
 }
@@ -2126,13 +2119,11 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 	s.logger.Printf("reached expected bootstrap count of %d, starting cluster bootstrap",
 		s.BootstrapExpect)
 
-	raftServers := make([]raft.Server, 0, len(s.notifyingNodes))
+	servers := make(Servers, 0, len(s.notifyingNodes))
 	for _, n := range s.notifyingNodes {
-		raftServers = append(raftServers, raft.Server{
-			ID:      raft.ServerID(n.ID),
-			Address: raft.ServerAddress(n.Addr),
-		})
+		servers = append(servers, n)
 	}
+	raftServers := servers.RaftServers()
 	bf := s.raft.BootstrapCluster(raft.Configuration{
 		Servers: raftServers,
 	})
