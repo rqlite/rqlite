@@ -84,7 +84,7 @@ The reader (`wal.Reader`, derived from the LiteFS reader) walks WAL frames, veri
 Two iterators sit on top of the reader:
 
 - **`FullScanner`** emits every frame in order, used when an exact copy is needed.
-- **`CompactingFrameScanner`** scans frames into a `(pgno → latest committed frame)` map, then emits the survivors in file-offset order. It honors transaction boundaries: frames between a non-committing frame and its commit are buffered in a temporary map and only merged into the survivor set once the commit lands. An open transaction at the end of the WAL produces `ErrOpenTransaction` rather than silently dropping the in-progress frames.
+- **`CompactingFrameScanner`** scans frames into a `(pgno → latest committed frame)` map, then emits the survivors in file-offset order. It honors transaction boundaries: frames between a non-committing frame and its commit are buffered in a temporary map and only merged into the survivor set once the commit lands. Frames after the last commit frame are never emitted: a transaction that was rolled back, or interrupted, leaves them in the WAL, and SQLite ignores them too.
 
 The compacting scanner has a `fullScan` mode that verifies every frame's checksum (required when starting from frame zero) and a fast mode that skips the page-data read entirely and trusts SQLite's salt for validity. The fast mode is what the `CheckpointManager` uses on the live WAL — SQLite has just produced it, so it is trusted. Frame-data buffers are reused across `Next()` calls (`pageBuf`), so scanning a multi-gigabyte WAL does not allocate per frame.
 
