@@ -1,6 +1,7 @@
 ## v10.7.0 (unreleased)
 ### New features
 - [PR #2996](https://github.com/rqlite/rqlite/pull/2996): Support server-side encryption for automatic backups to AWS S3.
+- [PR #3005](https://github.com/rqlite/rqlite/pull/3005): Support CMEK for automatic backups to Google Cloud Storage.
 
 ### Implementation changes and bug fixes
 - [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
