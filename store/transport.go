@@ -218,7 +218,7 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 							continue
 						}
 						cmd.Size = sz
-						rpc.Reader = dec
+						rpc.Reader = &snapshotStream{snapshot: dec, compressed: rpc.Reader}
 					}
 				case *raft.AppendEntriesRequest:
 					n.lastAppendEntriesRxTime.Store(time.Now())
@@ -256,6 +256,30 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 		}
 	}()
 	return ch
+}
+
+// snapshotStream is the reader handed to Raft for a compressed snapshot. Raft
+// reads the snapshot from it, and then drains it so that the connection is
+// left clean for the next RPC. The zstd decoder returns the last of the
+// snapshot without reading the trailing bytes of its frame, so once the
+// snapshot is exhausted, draining must consume what remains of the compressed
+// stream. Raft bounds that stream to the compressed size, so this cannot block.
+type snapshotStream struct {
+	snapshot   io.Reader // The decompressed snapshot.
+	compressed io.Reader // The compressed stream the snapshot is read from.
+}
+
+// Read reads the snapshot. Once the snapshot is exhausted, the remainder of
+// the compressed stream is consumed and discarded.
+func (s *snapshotStream) Read(p []byte) (int, error) {
+	n, err := s.snapshot.Read(p)
+	if err != io.EOF {
+		return n, err
+	}
+	if _, err := io.Copy(io.Discard, s.compressed); err != nil {
+		return n, err
+	}
+	return n, io.EOF
 }
 
 // Stats returns the current stats of the transport.

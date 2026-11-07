@@ -63,11 +63,13 @@ func testInstallSnapshotCompressed(t *testing.T, payload []byte) {
 
 	// Stand in for Raft on the receiving side. Raft copies the stream into a
 	// snapshot sink and rejects the snapshot unless the number of bytes copied
-	// equals the size in the request.
+	// equals the size in the request. It then drains the reader, so that the
+	// connection is left clean for the next RPC.
 	type received struct {
-		data []byte
-		size int64
-		err  error
+		data   []byte
+		size   int64
+		unread int64 // Bytes Raft was told were on the wire, but which were never read.
+		err    error
 	}
 	rxCh := make(chan received, 1)
 	rpcCh := rx.Consumer()
@@ -75,8 +77,10 @@ func testInstallSnapshotCompressed(t *testing.T, payload []byte) {
 		rpc := <-rpcCh
 		req := rpc.Command.(*raft.InstallSnapshotRequest)
 		data, err := io.ReadAll(rpc.Reader)
+		_, _ = io.Copy(io.Discard, rpc.Reader)
 		rpc.Respond(&raft.InstallSnapshotResponse{Success: err == nil}, err)
-		rxCh <- received{data: data, size: req.Size, err: err}
+		wire := rpc.Reader.(*snapshotStream).compressed.(*io.LimitedReader)
+		rxCh <- received{data: data, size: req.Size, unread: wire.N, err: err}
 	}()
 
 	args := &raft.InstallSnapshotRequest{
@@ -104,5 +108,8 @@ func testInstallSnapshotCompressed(t *testing.T, payload []byte) {
 	}
 	if !bytes.Equal(got.data, payload) {
 		t.Fatalf("receiver got different data from that sent")
+	}
+	if got.unread != 0 {
+		t.Fatalf("%d bytes of the compressed stream were left on the connection", got.unread)
 	}
 }

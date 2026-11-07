@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
 - [PR #3006](https://github.com/rqlite/rqlite/pull/3006): Reject duplicate usernames in auth config and require an actual JSON array.
+- [PR #XXX](https://github.com/rqlite/rqlite/pull/XXX): Fix installing incompressible snapshots when snapshot compression is enabled on the transport.
 
 ## v10.6.6 (October 28th 2026)
 ### Implementation changes and bug fixes
