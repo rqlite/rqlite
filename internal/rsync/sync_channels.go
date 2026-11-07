@@ -29,15 +29,17 @@ func (sc *SyncChannels) Register(ch chan<- chan struct{}) {
 }
 
 // Sync sends a channel to all registered channels and waits for those channels
-// to close. Returns the total number of channels and the number that
-// successfully synchronized before any error or timeout.
-func (sc *SyncChannels) Sync(timeout time.Duration) (int, int, error) {
+// to close. Returns the total number of channels, the number that successfully
+// synchronized before any error or timeout, and the number that never received
+// the sync signal at all. A participant that never receives is dropped once the
+// timeout passes, rather than blocking forever.
+func (sc *SyncChannels) Sync(timeout time.Duration) (int, int, int, error) {
 	sc.chsMu.Lock()
 	defer sc.chsMu.Unlock()
 	cancel := make(chan struct{})
-	defer close(cancel)
 
 	var nOK atomic.Int32
+	var nDropped atomic.Int32
 	var wg sync.WaitGroup
 	wg.Add(len(sc.chs))
 	for _, ch := range sc.chs {
@@ -47,7 +49,7 @@ func (sc *SyncChannels) Sync(timeout time.Duration) (int, int, error) {
 			select {
 			case ch <- syncCh:
 			case <-cancel:
-				// Participant never received; give up rather than block forever.
+				nDropped.Add(1)
 				return
 			}
 			select {
@@ -70,5 +72,10 @@ func (sc *SyncChannels) Sync(timeout time.Duration) (int, int, error) {
 	case <-time.After(timeout):
 		err = ErrTimeout
 	}
-	return len(sc.chs), int(nOK.Load()), err
+
+	// Release any goroutine still waiting on a participant, then wait for all
+	// of them to record their outcome before reading the counts.
+	close(cancel)
+	<-done
+	return len(sc.chs), int(nOK.Load()), int(nDropped.Load()), err
 }
