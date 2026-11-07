@@ -572,7 +572,12 @@ func (s *Store) Open() (retErr error) {
 	s.raftTn = NewNodeTransport(nt, s.CompressSnapTransport)
 
 	// Don't allow control over trailing logs directly, just implement a policy.
+	// With no snapshot threshold set, Raft runs with its own default, and that
+	// is the value Snapshot() must restore afterwards.
 	s.numTrailingLogs = uint64(float64(s.SnapshotThreshold) * trailingScale)
+	if s.SnapshotThreshold == 0 {
+		s.numTrailingLogs = raft.DefaultConfig().TrailingLogs
+	}
 
 	raftConfig := s.raftConfig()
 

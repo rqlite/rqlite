@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/command/proto"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db"
@@ -16,6 +17,50 @@ import (
 	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/rqlite/v10/snapshot"
 )
+
+// Test_SingleNodeSnapshot_TrailingLogsRestored checks that a user-requested
+// snapshot which leaves a specific number of trailing logs puts the trailing
+// logs setting back to what Raft started with. With no snapshot threshold set
+// that is Raft's own default, not zero.
+func Test_SingleNodeSnapshot_TrailingLogsRestored(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	exp := raft.DefaultConfig().TrailingLogs
+	if got := s.raft.ReloadableConfig().TrailingLogs; got != exp {
+		t.Fatalf("unexpected trailing logs before snapshot, exp %d, got %d", exp, got)
+	}
+
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	if _, _, err := s.Execute(context.Background(), er); err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if err := s.Snapshot(1); err != nil {
+		t.Fatalf("failed to take user-requested snapshot: %s", err.Error())
+	}
+
+	if got := s.raft.ReloadableConfig().TrailingLogs; got != exp {
+		t.Fatalf("unexpected trailing logs after snapshot, exp %d, got %d", exp, got)
+	}
+	st, err := s.Stats()
+	if err != nil {
+		t.Fatalf("failed to get stats: %s", err.Error())
+	}
+	if got := st["trailing_logs"]; got != exp {
+		t.Fatalf("unexpected trailing_logs stat, exp %d, got %v", exp, got)
+	}
+}
 
 // Test_SingleNodeSnapshot tests that the Store correctly takes a snapshot
 // and recovers from it.
