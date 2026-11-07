@@ -152,8 +152,7 @@ func HasData(dir string) (bool, error) {
 	if len(snaps) > 0 {
 		return true, nil
 	}
-	// Opening a missing Bolt database creates it, which would make an empty
-	// data directory appear to belong to an existing node to IsNewNode.
+	// Opening a missing database creates it, breaking the definition of a new node.
 	if !fsutil.PathExists(filepath.Join(dir, raftDBPath)) {
 		return false, nil
 	}
