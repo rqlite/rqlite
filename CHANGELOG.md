@@ -5,6 +5,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #3021](https://github.com/rqlite/rqlite/pull/3021): Reject malformed queued-write requests with the wait flag while preserving empty-array and null requests used to wait for the queue to flush.
+- [PR #3019](https://github.com/rqlite/rqlite/pull/3019): Reject trailing JSON values and junk in leader stepdown requests before changing leadership.
 - [PR #3017](https://github.com/rqlite/rqlite/pull/3017): Return the correct elapsed time for HTTP database loads requested with timings.
 - [PR #3013](https://github.com/rqlite/rqlite/pull/3013): Avoid creating Raft state when checking an empty data directory for automatic restore.
 - [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
