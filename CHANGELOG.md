@@ -1,4 +1,7 @@
-## v10.6.7 (unreleased)
+## v10.7.0 (unreleased)
+### New features
+- [PR #2996](https://github.com/rqlite/rqlite/pull/2996): Support server-side encryption for automatic backups to AWS S3.
+
 ### Implementation changes and bug fixes
 - [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
 - [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Accept extension tarballs whose entries are prefixed with `./`.
