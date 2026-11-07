@@ -6,6 +6,8 @@ import (
 
 	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 // Test_OpenSwappable_Success tests that OpenSwappable correctly opens a database and returns
@@ -159,7 +161,7 @@ func Test_SwapSuccess_Hooks(t *testing.T) {
 		preupdates++
 		return nil
 	}
-	cfg.Writer.CommitHook = func() bool {
+	cfg.Writer.CommitHook = func(*sqlite3.SQLiteConn) bool {
 		commits++
 		return true
 	}
@@ -193,11 +195,11 @@ func Test_SwapSuccess_Hooks(t *testing.T) {
 func Test_OpenSwappable_HooksPerRole(t *testing.T) {
 	var writerCommits, readerCommits, readerPreupdates int
 	cfg := NewConfig(ConnConfig{}, true)
-	cfg.Writer.CommitHook = func() bool {
+	cfg.Writer.CommitHook = func(*sqlite3.SQLiteConn) bool {
 		writerCommits++
 		return true
 	}
-	cfg.Readers.CommitHook = func() bool {
+	cfg.Readers.CommitHook = func(*sqlite3.SQLiteConn) bool {
 		readerCommits++
 		return true
 	}

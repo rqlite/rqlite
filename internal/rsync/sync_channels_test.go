@@ -16,12 +16,12 @@ const (
 
 func Test_Sync_NoRegistrations(t *testing.T) {
 	sc := NewSyncChannels()
-	total, ok, err := sc.Sync(testTimeout)
+	total, ok, dropped, err := sc.Sync(testTimeout)
 	if err != nil {
 		t.Fatalf("Sync() with no registrations returned error: %v", err)
 	}
-	if total != 0 || ok != 0 {
-		t.Fatalf("Sync() with no registrations returned total=%d, ok=%d; want 0,0", total, ok)
+	if total != 0 || ok != 0 || dropped != 0 {
+		t.Fatalf("Sync() with no registrations returned total=%d, ok=%d, dropped=%d; want 0,0,0", total, ok, dropped)
 	}
 }
 
@@ -36,12 +36,12 @@ func Test_Sync_SingleChannel_Succeeds(t *testing.T) {
 		close(syncCh)
 	}()
 
-	total, ok, err := sc.Sync(testTimeout)
+	total, ok, dropped, err := sc.Sync(testTimeout)
 	if err != nil {
 		t.Fatalf("Sync() returned unexpected error: %v", err)
 	}
-	if total != 1 || ok != 1 {
-		t.Fatalf("Sync() returned total=%d, ok=%d; want 1,1", total, ok)
+	if total != 1 || ok != 1 || dropped != 0 {
+		t.Fatalf("Sync() returned total=%d, ok=%d, dropped=%d; want 1,1,0", total, ok, dropped)
 	}
 }
 
@@ -66,7 +66,7 @@ func Test_Sync_MultipleChannels_WaitsForAll(t *testing.T) {
 		close(syncCh)
 	}()
 
-	total, ok, err := sc.Sync(testTimeout)
+	total, ok, _, err := sc.Sync(testTimeout)
 	if err != nil {
 		t.Fatalf("Sync() returned unexpected error: %v", err)
 	}
@@ -96,12 +96,28 @@ func Test_Sync_Timeout_WhenParticipantNeverCloses(t *testing.T) {
 		_ = syncCh // intentionally never close
 	}()
 
-	total, ok, err := sc.Sync(smallTimeout)
+	total, ok, dropped, err := sc.Sync(smallTimeout)
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("Sync() error = %v, want ErrTimeout", err)
 	}
-	if total != 2 || ok != 1 {
-		t.Fatalf("Sync() returned total=%d, ok=%d; want 2,1", total, ok)
+	if total != 2 || ok != 1 || dropped != 0 {
+		t.Fatalf("Sync() returned total=%d, ok=%d, dropped=%d; want 2,1,0", total, ok, dropped)
+	}
+}
+
+// Test_Sync_Timeout_WhenParticipantNeverReceives checks that a participant
+// which never reads from its registered channel is reported as dropped once
+// Sync times out, instead of leaving Sync waiting on it forever.
+func Test_Sync_Timeout_WhenParticipantNeverReceives(t *testing.T) {
+	sc := NewSyncChannels()
+	sc.Register(make(chan chan struct{})) // Nobody ever reads from this.
+
+	total, ok, dropped, err := sc.Sync(smallTimeout)
+	if !errors.Is(err, ErrTimeout) {
+		t.Fatalf("Sync() error = %v, want ErrTimeout", err)
+	}
+	if total != 1 || ok != 0 || dropped != 1 {
+		t.Fatalf("Sync() returned total=%d, ok=%d, dropped=%d; want 1,0,1", total, ok, dropped)
 	}
 }
 
@@ -122,14 +138,14 @@ func Test_Sync_ReusedAcrossCalls(t *testing.T) {
 		close(s2)
 		close(done1)
 	}()
-	total, ok, err := sc.Sync(testTimeout)
+	total, ok, dropped, err := sc.Sync(testTimeout)
 	if err != nil {
 		t.Fatalf("first Sync() error: %v", err)
 	}
 	<-done1
 
-	if total != 2 || ok != 2 {
-		t.Fatalf("first Sync() returned total=%d, ok=%d; want 2,2", total, ok)
+	if total != 2 || ok != 2 || dropped != 0 {
+		t.Fatalf("first Sync() returned total=%d, ok=%d, dropped=%d; want 2,2,0", total, ok, dropped)
 	}
 
 	// Second sync: staggered closes, still should succeed before timeout.
@@ -141,11 +157,11 @@ func Test_Sync_ReusedAcrossCalls(t *testing.T) {
 		time.Sleep(shortDelay)
 		close(s2)
 	}()
-	total, ok, err = sc.Sync(testTimeout)
+	total, ok, dropped, err = sc.Sync(testTimeout)
 	if err != nil {
 		t.Fatalf("second Sync() error: %v", err)
 	}
-	if total != 2 || ok != 2 {
-		t.Fatalf("second Sync() returned total=%d, ok=%d; want 2,2", total, ok)
+	if total != 2 || ok != 2 || dropped != 0 {
+		t.Fatalf("second Sync() returned total=%d, ok=%d, dropped=%d; want 2,2", total, ok, dropped)
 	}
 }

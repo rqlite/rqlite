@@ -1,6 +1,23 @@
 ## v10.7.0 (unreleased)
 ### New features
-- [PR #2996](https://github.com/rqlite/rqlite/pull/2996): Support server-side encryption for S3 auto-backups via `server_side_encryption` and `sse_kms_key_id`.
+- [PR #2996](https://github.com/rqlite/rqlite/pull/2996): Support server-side encryption for automatic backups to AWS S3.
+
+### Implementation changes and bug fixes
+- [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
+- [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Accept extension tarballs whose entries are prefixed with `./`.
+- [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Create implicit parent directories with directory permissions when extracting zip and tar.gz archives, instead of the contained file's mode.
+- [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Stop leaking goroutines from the pre-snapshot sync when a registered participant.
+- [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Remove the temporary output file when gzip compression or decompression of a file fails part-way through.
+- [PR #3006](https://github.com/rqlite/rqlite/pull/3006): Reject duplicate usernames in auth config and require an actual JSON array.
+- [PR #3010](https://github.com/rqlite/rqlite/pull/3010): Apply the configured busy timeout to every pooled reader connection, not just the one borrowed when it was set.
+- [PR #3008](https://github.com/rqlite/rqlite/pull/3008): Request reads at `auto` consistency now use the level `auto` resolves correctly.
+- [PR #3008](https://github.com/rqlite/rqlite/pull/3008): Report the Store's `open` status as a boolean, instead of an empty object, in `/status`.
+- [PR #3008](https://github.com/rqlite/rqlite/pull/3008): User-requested snapshot no longer leaves Raft's trailing-logs setting at zero when no snapshot threshold is set.
+- [PR #3009](https://github.com/rqlite/rqlite/pull/3009): Resolve the column names of CDC events for a table created by the same transaction that fills it.
+- [PR #3009](https://github.com/rqlite/rqlite/pull/3009): Match the table names given to a SQL dump regardless of case, so the dump carries the tables along with their indexes and triggers and can be loaded.
+- [PR #3009](https://github.com/rqlite/rqlite/pull/3009): Report the compacted WAL bytes written by a checkpoint which moved every page but could not truncate the WAL.
+- [PR #3009](https://github.com/rqlite/rqlite/pull/3009): Fix a data race when the SQLite compile options are read by concurrent status requests.
+- [PR #3012](https://github.com/rqlite/rqlite/pull/3012): Ignore any frames after the last commit frame when compacting the WAL.
 
 ## v10.6.6 (October 28th 2026)
 ### Implementation changes and bug fixes

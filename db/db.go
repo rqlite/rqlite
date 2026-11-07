@@ -489,36 +489,20 @@ func (db *DB) ExtensionNames() []string {
 	return extensionNames(db.cfg.Writer.Extensions)
 }
 
-// SetBusyTimeout sets the busy timeout for the database. If a timeout is
-// less than zero it is not set.
-func (db *DB) SetBusyTimeout(rwMs, roMs int) (err error) {
-	if rwMs >= 0 {
-		if err := db.writer.setBusyTimeout(rwMs); err != nil {
-			return err
-		}
-	}
-	if roMs >= 0 {
-		if err := db.readers.setBusyTimeout(roMs); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// RWBusyTimeout returns the current busy timeout value for the read-write
-// database connection.
+// RWBusyTimeout returns the busy timeout, in milliseconds, of the read-write
+// database connection. It is set by the writer's ConnConfig.
 func (db *DB) RWBusyTimeout() (int, error) {
 	return db.writer.busyTimeout()
 }
 
-// ROBusyTimeout returns the current busy timeout value for the read-only
-// database connection.
+// ROBusyTimeout returns the busy timeout, in milliseconds, of the read-only
+// database connections. It is set by the readers' ConnConfig.
 func (db *DB) ROBusyTimeout() (int, error) {
 	return db.readers.busyTimeout()
 }
 
-// BusyTimeout returns the current busy timeout values for the read-write and
-// read-only database connections.
+// BusyTimeout returns the busy timeouts, in milliseconds, of the read-write
+// and read-only database connections.
 func (db *DB) BusyTimeout() (rwMs, roMs int, err error) {
 	rwMs, err = db.RWBusyTimeout()
 	if err != nil {
@@ -812,10 +796,17 @@ func (db *DB) WALPath() string {
 	return db.walPath
 }
 
-var compileOptions []string // Memoized compile options
+// The compile options are those of the SQLite library, so they are the same
+// for every database and are read once.
+var (
+	compileOptionsMu sync.Mutex
+	compileOptions   []string
+)
 
 // CompileOptions returns the SQLite compilation options.
 func (db *DB) CompileOptions() ([]string, error) {
+	compileOptionsMu.Lock()
+	defer compileOptionsMu.Unlock()
 	if compileOptions != nil {
 		return compileOptions, nil
 	}
@@ -827,13 +818,14 @@ func (db *DB) CompileOptions() ([]string, error) {
 		return nil, fmt.Errorf("compile options result wrong size (%d)", len(res))
 	}
 
-	compileOptions = make([]string, len(res[0].Values))
-	for i := range compileOptions {
+	opts := make([]string, len(res[0].Values))
+	for i := range opts {
 		if len(res[0].Values[i].Parameters) != 1 {
 			return nil, fmt.Errorf("compile options values wrong size (%d)", len(res[0].Values[i].Parameters))
 		}
-		compileOptions[i] = res[0].Values[i].Parameters[0].GetS()
+		opts[i] = res[0].Values[i].Parameters[0].GetS()
 	}
+	compileOptions = opts
 	return compileOptions, nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"time"
 
 	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
@@ -27,14 +28,20 @@ const (
 
 // ConnConfig is the policy applied to every connection of one role when it
 // is opened: which extensions it loads, how it treats the WAL on close,
-// whether it enforces foreign keys, which hooks it carries, and whether its
-// statements are traced.
+// how long it waits for a locked database, whether it enforces foreign
+// keys, which hooks it carries, and whether its statements are traced.
 type ConnConfig struct {
 	// Extensions is the list of paths to SQLite extension shared objects.
 	Extensions []string
 
 	// ChkOnClose controls whether SQLite checkpoints the WAL on connection close.
 	ChkOnClose CnkOnCloseMode
+
+	// BusyTimeout is how long a connection waits for a locked database
+	// before a statement fails with SQLITE_BUSY. It is applied to every new
+	// connection with millisecond precision. Zero keeps the driver default
+	// of five seconds.
+	BusyTimeout time.Duration
 
 	// ForeignKeys, if true, enables foreign key constraints on every new
 	// connection.
@@ -103,7 +110,7 @@ func (c *connector) Driver() driver.Driver {
 
 // buildConnectHook composes a ConnectHook from cfg, chaining all requested
 // connection-level behaviors in order: checkpoint config, attach limit,
-// foreign keys, query tracing, then hooks.
+// busy timeout, foreign keys, query tracing, then hooks.
 //
 // This driver unconditionally disables automatic checkpointing.
 func buildConnectHook(cfg *ConnConfig) func(conn *sqlite3.SQLiteConn) error {
@@ -127,6 +134,13 @@ func buildConnectHook(cfg *ConnConfig) func(conn *sqlite3.SQLiteConn) error {
 		// statements. DETACH then fails on its own, as nothing is attached.
 		if cfg.DisableAttach {
 			conn.SetLimit(sqlite3.SQLITE_LIMIT_ATTACHED, 0)
+		}
+
+		// Busy timeout.
+		if cfg.BusyTimeout > 0 {
+			if _, err := conn.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", cfg.BusyTimeout.Milliseconds()), nil); err != nil {
+				return fmt.Errorf("cannot set busy timeout: %w", err)
+			}
 		}
 
 		// Foreign key constraints.
@@ -155,7 +169,7 @@ func buildConnectHook(cfg *ConnConfig) func(conn *sqlite3.SQLiteConn) error {
 			conn.RegisterUpdateHook(cfg.UpdateHook.SQLite())
 		}
 		if cfg.CommitHook != nil {
-			conn.RegisterCommitHook(cfg.CommitHook.SQLite())
+			conn.RegisterCommitHook(cfg.CommitHook.SQLite(conn))
 		}
 		if cfg.RollbackHook != nil {
 			conn.RegisterRollbackHook(cfg.RollbackHook)
@@ -299,15 +313,17 @@ func (hook *UpdateHookCallback) SQLite() func(int, string, string, int64) {
 type RollbackHookCallback func()
 
 // CommitHookCallback is a callback function that is called whenever a transaction
-// is committed to the database. If the callback returns true the transaction
-// is committed, otherwise it is rolled back.
-type CommitHookCallback func() bool
+// is committed to the database. It is passed the connection committing the
+// transaction. If the callback returns true the transaction is committed,
+// otherwise it is rolled back.
+type CommitHookCallback func(conn *sqlite3.SQLiteConn) bool
 
-// SQLite returns the SQLite commit hook which passes control to hook.
-func (hook *CommitHookCallback) SQLite() func() int {
+// SQLite returns the SQLite commit hook which passes control to hook, along
+// with conn, the connection the hook is registered on.
+func (hook *CommitHookCallback) SQLite(conn *sqlite3.SQLiteConn) func() int {
 	return func() int {
 		stats.Add(numCommitHooks, 1)
-		if (*hook)() {
+		if (*hook)(conn) {
 			return 0
 		}
 		return 1
