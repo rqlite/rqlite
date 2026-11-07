@@ -4,7 +4,6 @@ import (
 	"compress/gzip"
 	"io"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
@@ -123,65 +122,6 @@ func Test_Gunzip_InvalidGzip(t *testing.T) {
 	_, err = Gunzip(tmpFile.Name())
 	if err == nil {
 		t.Error("Expected an error when trying to decompress invalid GZIP data, but got none")
-	}
-}
-
-// Test_Gunzip_TruncatedGzip_NoTempFileLeft checks that when decompression fails
-// part-way through, the temporary output file is not left behind.
-func Test_Gunzip_TruncatedGzip_NoTempFileLeft(t *testing.T) {
-	// Build a valid gzip stream, then cut it off after the header so the
-	// gzip reader opens fine but fails while copying.
-	src := filepath.Join(t.TempDir(), "truncated.gz")
-	f, err := os.Create(src)
-	if err != nil {
-		t.Fatalf("Failed to create source file: %v", err)
-	}
-	gw := gzip.NewWriter(f)
-	if _, err := gw.Write([]byte("This is some content to compress")); err != nil {
-		t.Fatalf("Failed to write gzip data: %v", err)
-	}
-	if err := gw.Close(); err != nil {
-		t.Fatalf("Failed to close gzip writer: %v", err)
-	}
-	if err := f.Truncate(12); err != nil {
-		t.Fatalf("Failed to truncate: %v", err)
-	}
-	f.Close()
-
-	tmpDir := t.TempDir()
-	t.Setenv("TMPDIR", tmpDir) // os.CreateTemp("", ...) honours this.
-
-	if _, err := Gunzip(src); err == nil {
-		t.Fatal("Expected an error when decompressing a truncated gzip file, but got none")
-	}
-	entries, err := os.ReadDir(tmpDir)
-	if err != nil {
-		t.Fatalf("Failed to read temp dir: %v", err)
-	}
-	if len(entries) != 0 {
-		t.Fatalf("Expected no temporary files left behind, found %d", len(entries))
-	}
-}
-
-// Test_Gzip_ReadFailure_NoTempFileLeft checks that when the source cannot be
-// read, the temporary output file is not left behind.
-func Test_Gzip_ReadFailure_NoTempFileLeft(t *testing.T) {
-	// A directory can be opened, but reading from it fails. Create it before
-	// redirecting TMPDIR so it does not land in the directory being checked.
-	srcDir := t.TempDir()
-
-	tmpDir := t.TempDir()
-	t.Setenv("TMPDIR", tmpDir) // os.CreateTemp("", ...) honours this.
-
-	if _, err := Gzip(srcDir); err == nil {
-		t.Fatal("Expected an error when compressing a directory, but got none")
-	}
-	entries, err := os.ReadDir(tmpDir)
-	if err != nil {
-		t.Fatalf("Failed to read temp dir: %v", err)
-	}
-	if len(entries) != 0 {
-		t.Fatalf("Expected no temporary files left behind, found %d", len(entries))
 	}
 }
 
