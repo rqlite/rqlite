@@ -82,8 +82,10 @@ func UnzipToDir(path, dir string) error {
 				return err
 			}
 		} else {
-			// Create the file
-			if err := os.MkdirAll(filepath.Dir(fpath), f.Mode()); err != nil {
+			// Create any parent directories the archive did not list explicitly.
+			// The file's own mode is not suitable for a directory, as it may
+			// lack the execute bit needed to create entries within it.
+			if err := os.MkdirAll(filepath.Dir(fpath), 0755); err != nil {
 				return err
 			}
 
