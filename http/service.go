@@ -3,6 +3,7 @@ package http
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -2091,8 +2092,13 @@ func getSubJSON(jsonBlob []byte, keyString string) (json.RawMessage, error) {
 
 	keys := strings.Split(keyString, ".")
 	var obj any
-	if err := json.Unmarshal(jsonBlob, &obj); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(jsonBlob))
+	dec.UseNumber()
+	if err := dec.Decode(&obj); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal json: %w", err)
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, fmt.Errorf("unexpected data after JSON value")
 	}
 
 	for _, key := range keys {
