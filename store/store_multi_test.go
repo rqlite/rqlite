@@ -516,6 +516,76 @@ func Test_MultiNodeSnapshot_Joins(t *testing.T) {
 	}, 100*time.Millisecond, 5*time.Second)
 }
 
+// Test_MultiNodeSnapshot_Joins_CompressedTransport tests that a node joining a
+// cluster is brought up to date by a snapshot when snapshots are compressed
+// on the transport.
+func Test_MultiNodeSnapshot_Joins_CompressedTransport(t *testing.T) {
+	s0, ln := mustNewStore(t)
+	s0.CompressSnapTransport = true
+	defer ln.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`, false, false)
+	if _, _, err := s0.Execute(context.Background(), er); err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	stmts := make([]string, 0, 100)
+	for range 100 {
+		stmts = append(stmts, `INSERT INTO foo(name) VALUES("fiona")`)
+	}
+	er = executeRequestFromStrings(stmts, false, false)
+	if _, _, err := s0.Execute(context.Background(), er); err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Snapshot, leaving just one log entry behind, so a joining node has
+	// to be sent the snapshot rather than have the log replayed to it.
+	if err := s0.Snapshot(1); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+	fi, err := s0.boltStore.FirstIndex()
+	if err != nil {
+		t.Fatalf("failed to get first log index: %s", err.Error())
+	}
+	if fi <= 1 {
+		t.Fatalf("log was not truncated after snapshot, first index is %d", fi)
+	}
+
+	// Fire up second node and join it to the first.
+	s1, ln1 := mustNewStore(t)
+	s1.CompressSnapTransport = true
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Check that the joining node eventually gets the records.
+	testPoll(t, func() bool {
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true, false)
+		qr.Level = proto.ConsistencyLevel_NONE
+		r, _, _, err := s1.Query(context.Background(), qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		return asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[100]]}]`
+	}, 100*time.Millisecond, 5*time.Second)
+}
+
 // Test_MultiNodeSnapshot_ErrorMessage tests that a snapshot fails with a specific
 // error message when the snapshot is attempted too soon after joining a cluster.
 // Hashicorp Raft doesn't expose a typed error, so we have to check the error

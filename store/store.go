@@ -117,30 +117,31 @@ var (
 )
 
 const (
-	cdcChanLen             = 100 // Size of the channel on which CDC events are sent.
-	cleanSnapshotName      = "clean_snapshot"
-	snapshotsDirName       = "wsnapshots"
-	walStagingDirName      = "wal-staging"
-	restoreScratchPattern  = "rqlite-restore-*"
-	bootScratchPattern     = "rqlite-boot-*"
-	backupScratchPattern   = "rqlite-backup-*"
-	raftDBPath             = "raft.db" // Changing this will break backwards compatibility.
-	peersPath              = "raft/peers.json"
-	peersInfoPath          = "raft/peers.info"
-	applyTimeout           = 10 * time.Second
-	sqliteFile             = "db.sqlite"
-	linearizableTimeout    = 1 * time.Second
-	leaderWaitDelay        = 100 * time.Millisecond
-	appliedWaitDelay       = 100 * time.Millisecond
-	commitEquivalenceDelay = 50 * time.Millisecond
-	truncateTimeout        = 250 * time.Millisecond
-	backupCASTimeout       = 10 * time.Second
-	backupCASRetryDelay    = 100 * time.Millisecond
-	connectionPoolCount    = 5
-	connectionTimeout      = 10 * time.Second
-	raftLogCacheSize       = 512
-	trailingScale          = 1.25
-	observerChanLen        = 50
+	cdcChanLen                  = 100 // Size of the channel on which CDC events are sent.
+	cleanSnapshotName           = "clean_snapshot"
+	snapshotsDirName            = "wsnapshots"
+	walStagingDirName           = "wal-staging"
+	restoreScratchPattern       = "rqlite-restore-*"
+	bootScratchPattern          = "rqlite-boot-*"
+	backupScratchPattern        = "rqlite-backup-*"
+	snapTransportScratchPattern = "rqlite-snap-tx-*"
+	raftDBPath                  = "raft.db" // Changing this will break backwards compatibility.
+	peersPath                   = "raft/peers.json"
+	peersInfoPath               = "raft/peers.info"
+	applyTimeout                = 10 * time.Second
+	sqliteFile                  = "db.sqlite"
+	linearizableTimeout         = 1 * time.Second
+	leaderWaitDelay             = 100 * time.Millisecond
+	appliedWaitDelay            = 100 * time.Millisecond
+	commitEquivalenceDelay      = 50 * time.Millisecond
+	truncateTimeout             = 250 * time.Millisecond
+	backupCASTimeout            = 10 * time.Second
+	backupCASRetryDelay         = 100 * time.Millisecond
+	connectionPoolCount         = 5
+	connectionTimeout           = 10 * time.Second
+	raftLogCacheSize            = 512
+	trailingScale               = 1.25
+	observerChanLen             = 50
 
 	baseVacuumTimeKey   = "rqlite_base_vacuum"
 	lastVacuumTimeKey   = "rqlite_last_vacuum"
@@ -569,7 +570,7 @@ func (s *Store) Open() (retErr error) {
 
 	// Create Raft-compatible network layer.
 	nt := raft.NewNetworkTransport(NewTransport(s.ly), connectionPoolCount, connectionTimeout, nil)
-	s.raftTn = NewNodeTransport(nt, s.CompressSnapTransport)
+	s.raftTn = NewNodeTransport(nt, s.CompressSnapTransport, s.dbDir)
 
 	// Don't allow control over trailing logs directly, just implement a policy.
 	s.numTrailingLogs = uint64(float64(s.SnapshotThreshold) * trailingScale)
@@ -815,7 +816,8 @@ func (s *Store) Open() (retErr error) {
 	for _, pattern := range []string{
 		restoreScratchPattern,
 		bootScratchPattern,
-		backupScratchPattern} {
+		backupScratchPattern,
+		snapTransportScratchPattern} {
 		for _, dir := range []string{s.raftDir, s.dbDir} {
 			files, err := filepath.Glob(filepath.Join(dir, pattern))
 			if err != nil {

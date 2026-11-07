@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rarchive/zstd"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
 )
@@ -58,6 +60,7 @@ func (t *Transport) Addr() net.Addr {
 type NodeTransport struct {
 	*raft.NetworkTransport
 	compressSnap bool
+	scratchDir   string // Directory for scratch files used when compressing snapshots.
 
 	aeMu                   sync.RWMutex
 	appendEntriesTxHandler func(req *raft.AppendEntriesRequest) error
@@ -71,11 +74,15 @@ type NodeTransport struct {
 	logger                  *log.Logger
 }
 
-// NewNodeTransport returns an initialized NodeTransport.
-func NewNodeTransport(transport *raft.NetworkTransport, compressSnap bool) *NodeTransport {
+// NewNodeTransport returns an initialized NodeTransport. If compressSnap is
+// true, snapshots are compressed before being sent to other nodes, and are
+// expected to be compressed when received. scratchDir is where the compressed
+// form of an outgoing snapshot is written before it is sent.
+func NewNodeTransport(transport *raft.NetworkTransport, compressSnap bool, scratchDir string) *NodeTransport {
 	return &NodeTransport{
 		NetworkTransport: transport,
 		compressSnap:     compressSnap,
+		scratchDir:       scratchDir,
 		done:             make(chan struct{}),
 		logger:           log.New(os.Stderr, "[transport] ", log.LstdFlags),
 	}
@@ -134,18 +141,45 @@ func (n *NodeTransport) Close() error {
 
 // InstallSnapshot is used to push a snapshot down to a follower. The data is read from
 // the ReadCloser and streamed to the client.
+//
+// When compression is enabled the size sent in the request is that of the
+// compressed stream, not of the snapshot. Raft on the receiving side reads
+// exactly that many bytes off the connection, so it must describe what is
+// actually on the wire. The compressed size is only known once compression is
+// complete, so the compressed stream is written to a scratch file first. The
+// receiving NodeTransport restores the size of the snapshot itself before
+// Raft checks it against the number of bytes it received.
 func (n *NodeTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest,
 	resp *raft.InstallSnapshotResponse, data io.Reader) error {
-	r := data
-	if n.compressSnap {
-		zstdData, err := zstd.NewCompressor(data, args.Size, zstd.DefaultBufferSize)
-		if err != nil {
-			return err
-		}
-		r = zstdData
-		defer zstdData.Close()
+	if !n.compressSnap {
+		return n.NetworkTransport.InstallSnapshot(id, target, args, resp, data)
 	}
-	return n.NetworkTransport.InstallSnapshot(id, target, args, resp, r)
+
+	fd, err := createTemp(n.scratchDir, snapTransportScratchPattern)
+	if err != nil {
+		return err
+	}
+	defer fsutil.Remove(fd.Name())
+	defer fd.Close()
+
+	zstdData, err := zstd.NewCompressor(data, args.Size, zstd.DefaultBufferSize)
+	if err != nil {
+		return err
+	}
+	compressedSize, err := io.Copy(fd, zstdData)
+	if err != nil {
+		return err
+	}
+	if err := zstdData.Close(); err != nil {
+		return err
+	}
+	if _, err := fd.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+
+	compressedArgs := *args
+	compressedArgs.Size = compressedSize
+	return n.NetworkTransport.InstallSnapshot(id, target, &compressedArgs, resp, fd)
 }
 
 // AppendEntries sends the appropriate RPC to the target node.
@@ -173,7 +207,18 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 				switch cmd := rpc.Command.(type) {
 				case *raft.InstallSnapshotRequest:
 					if rpc.Reader != nil && n.compressSnap {
-						rpc.Reader = zstd.NewDecompressor(rpc.Reader)
+						// The size in the request is that of the compressed
+						// stream, which Raft has used to bound its read of the
+						// connection. Raft now needs the size of the snapshot
+						// itself, to check that it received all of it.
+						dec := zstd.NewDecompressor(rpc.Reader)
+						sz, err := dec.UncompressedSize()
+						if err != nil {
+							rpc.Respond(nil, fmt.Errorf("failed to read compressed snapshot header: %w", err))
+							continue
+						}
+						cmd.Size = sz
+						rpc.Reader = dec
 					}
 				case *raft.AppendEntriesRequest:
 					n.lastAppendEntriesRxTime.Store(time.Now())
