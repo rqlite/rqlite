@@ -155,6 +155,22 @@ func Test_TarGzip_DotSlashEntries(t *testing.T) {
 	checkFileContent(t, filepath.Join(extractDir, "file2.txt"), "This is file 2")
 }
 
+// Test_UntarGzipToDir_NestedFileWithoutDirEntry checks that a file inside a
+// subdirectory extracts even when the archive carries no entry for the
+// directory itself.
+func Test_UntarGzipToDir_NestedFileWithoutDirEntry(t *testing.T) {
+	tarGzipFile := filepath.Join(t.TempDir(), "nested.tar.gz")
+	createTestTarGzipFileOrdered(t, tarGzipFile, []tarEntry{
+		{name: "sub/dir/file1.txt", typeflag: tar.TypeReg, mode: 0600, content: "This is file 1"},
+	})
+
+	extractDir := t.TempDir()
+	if err := UntarGzipToDir(tarGzipFile, extractDir); err != nil {
+		t.Fatalf("unexpected error during extraction: %v", err)
+	}
+	checkFileContent(t, filepath.Join(extractDir, "sub", "dir", "file1.txt"), "This is file 1")
+}
+
 type tarEntry struct {
 	name     string
 	typeflag byte
