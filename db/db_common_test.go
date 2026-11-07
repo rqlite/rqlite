@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -77,6 +78,33 @@ func Test_DB_CompileOptions(t *testing.T) {
 			t.Fatalf("%s not present in compile options", o)
 		}
 	}
+}
+
+// Test_DB_CompileOptions_Concurrent tests that the compile options can be
+// fetched by concurrent callers, as they are when the status of a node is
+// requested more than once at a time.
+func Test_DB_CompileOptions_Concurrent(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer fsutil.Remove(path)
+	defer db.Close()
+
+	// Make every caller read the options from the database.
+	compileOptions = nil
+
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			opts, err := db.CompileOptions()
+			if err != nil {
+				t.Errorf("failed to retrieve compilation options: %s", err.Error())
+			} else if len(opts) == 0 {
+				t.Error("no compile options returned")
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func Test_DB_SetSynchronousMode(t *testing.T) {
