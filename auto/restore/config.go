@@ -2,10 +2,13 @@ package restore
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
+	"filippo.io/age"
 	"github.com/rqlite/rqlite/v10/auto"
 	"github.com/rqlite/rqlite/v10/auto/aws"
 	"github.com/rqlite/rqlite/v10/auto/gcp"
@@ -18,6 +21,7 @@ type Config struct {
 	Timeout           auto.Duration    `json:"timeout,omitempty"`
 	ContinueOnFailure bool             `json:"continue_on_failure,omitempty"`
 	Sub               json.RawMessage  `json:"sub"`
+	DecryptionKeys    string           `json:"decryption_keys,omitempty"`
 }
 
 // ReadConfigFile reads the config file and returns the data. It also expands
@@ -48,6 +52,12 @@ func NewStorageClient(data []byte) (*Config, StorageClient, error) {
 
 	if dCfg.Version > auto.Version {
 		return nil, nil, auto.ErrInvalidVersion
+	}
+
+	if dCfg.DecryptionKeys != "" {
+		if _, err := age.ParseIdentities(strings.NewReader(dCfg.DecryptionKeys)); err != nil {
+			return nil, nil, fmt.Errorf("invalid decryption_keys: %w", err)
+		}
 	}
 
 	if dCfg.Timeout == 0 {
