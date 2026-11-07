@@ -45,6 +45,54 @@ func Test_Decompressor(t *testing.T) {
 	}
 }
 
+func Test_Decompressor_UncompressedSize(t *testing.T) {
+	testData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
+
+	compressor, err := NewCompressor(bytes.NewReader(testData), int64(len(testData)), DefaultBufferSize)
+	if err != nil {
+		t.Fatalf("failed to create compressor: %v", err)
+	}
+	defer compressor.Close()
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, compressor); err != nil {
+		t.Fatalf("failed to compress: %v", err)
+	}
+
+	// The size is available before any data has been read.
+	decompressor := NewDecompressor(&buf)
+	sz, err := decompressor.UncompressedSize()
+	if err != nil {
+		t.Fatalf("failed to get uncompressed size: %v", err)
+	}
+	if exp, got := int64(len(testData)), sz; exp != got {
+		t.Fatalf("expected uncompressed size %d, got %d", exp, got)
+	}
+
+	// Reading the size does not disturb the data.
+	decompressed, err := io.ReadAll(decompressor)
+	if err != nil {
+		t.Fatalf("failed to decompress: %v", err)
+	}
+	if !bytes.Equal(decompressed, testData) {
+		t.Fatalf("decompressed data does not match original")
+	}
+
+	// The size is still available once the stream has been read.
+	sz, err = decompressor.UncompressedSize()
+	if err != nil {
+		t.Fatalf("failed to get uncompressed size after read: %v", err)
+	}
+	if exp, got := int64(len(testData)), sz; exp != got {
+		t.Fatalf("expected uncompressed size %d after read, got %d", exp, got)
+	}
+
+	// A stream too short to hold the header is an error.
+	_, err = NewDecompressor(bytes.NewReader([]byte{1, 2, 3})).UncompressedSize()
+	if err == nil {
+		t.Fatalf("expected error reading size from truncated header")
+	}
+}
+
 func Test_Decompressor_EndToEnd(t *testing.T) {
 	ln := mustListenTCP()
 	defer ln.Close()

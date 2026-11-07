@@ -19,6 +19,9 @@ type Decompressor struct {
 	dec    *zstd.Decoder
 	reader io.Reader // LimitReader over the decoder output
 
+	hdrRead          bool
+	uncompressedSize int64
+
 	nRx int64
 	nTx int64
 }
@@ -31,6 +34,16 @@ func NewDecompressor(r io.Reader) *Decompressor {
 	}
 }
 
+// UncompressedSize returns the size of the uncompressed payload, as recorded
+// in the stream header. The header is read from the underlying reader if it
+// has not been read yet.
+func (d *Decompressor) UncompressedSize() (int64, error) {
+	if err := d.readHeader(); err != nil {
+		return 0, err
+	}
+	return d.uncompressedSize, nil
+}
+
 // Read reads decompressed data.
 func (d *Decompressor) Read(p []byte) (nn int, err error) {
 	defer func() {
@@ -39,22 +52,8 @@ func (d *Decompressor) Read(p []byte) (nn int, err error) {
 	if d.cr == nil {
 		return 0, io.EOF
 	}
-	if d.reader == nil {
-		// Read the 8-byte header to learn the uncompressed payload size.
-		var hdr [8]byte
-		if _, err := io.ReadFull(d.cr, hdr[:]); err != nil {
-			return 0, err
-		}
-		uncompressedSize := int64(binary.BigEndian.Uint64(hdr[:]))
-
-		d.dec, err = zstd.NewReader(d.cr, zstd.WithDecoderConcurrency(1))
-		if err != nil {
-			return 0, err
-		}
-
-		// Limit decompressed output so we never ask the decoder to
-		// probe for the next frame after this one is exhausted.
-		d.reader = io.LimitReader(d.dec, uncompressedSize)
+	if err := d.readHeader(); err != nil {
+		return 0, err
 	}
 
 	n, err := d.reader.Read(p)
@@ -67,4 +66,29 @@ func (d *Decompressor) Read(p []byte) (nn int, err error) {
 		d.reader = nil
 	}
 	return n, err
+}
+
+// readHeader reads the 8-byte header to learn the uncompressed payload size,
+// and sets up the decoder, if that has not already been done.
+func (d *Decompressor) readHeader() error {
+	if d.hdrRead {
+		return nil
+	}
+	var hdr [8]byte
+	if _, err := io.ReadFull(d.cr, hdr[:]); err != nil {
+		return err
+	}
+	d.uncompressedSize = int64(binary.BigEndian.Uint64(hdr[:]))
+
+	dec, err := zstd.NewReader(d.cr, zstd.WithDecoderConcurrency(1))
+	if err != nil {
+		return err
+	}
+	d.dec = dec
+
+	// Limit decompressed output so we never ask the decoder to
+	// probe for the next frame after this one is exhausted.
+	d.reader = io.LimitReader(d.dec, d.uncompressedSize)
+	d.hdrRead = true
+	return nil
 }
