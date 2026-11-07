@@ -489,36 +489,20 @@ func (db *DB) ExtensionNames() []string {
 	return extensionNames(db.cfg.Writer.Extensions)
 }
 
-// SetBusyTimeout sets the busy timeout for the database. If a timeout is
-// less than zero it is not set.
-func (db *DB) SetBusyTimeout(rwMs, roMs int) (err error) {
-	if rwMs >= 0 {
-		if err := db.writer.setBusyTimeout(rwMs); err != nil {
-			return err
-		}
-	}
-	if roMs >= 0 {
-		if err := db.readers.setBusyTimeout(roMs); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// RWBusyTimeout returns the current busy timeout value for the read-write
-// database connection.
+// RWBusyTimeout returns the busy timeout, in milliseconds, of the read-write
+// database connection. It is set by the writer's ConnConfig.
 func (db *DB) RWBusyTimeout() (int, error) {
 	return db.writer.busyTimeout()
 }
 
-// ROBusyTimeout returns the current busy timeout value for the read-only
-// database connection.
+// ROBusyTimeout returns the busy timeout, in milliseconds, of the read-only
+// database connections. It is set by the readers' ConnConfig.
 func (db *DB) ROBusyTimeout() (int, error) {
 	return db.readers.busyTimeout()
 }
 
-// BusyTimeout returns the current busy timeout values for the read-write and
-// read-only database connections.
+// BusyTimeout returns the busy timeouts, in milliseconds, of the read-write
+// and read-only database connections.
 func (db *DB) BusyTimeout() (rwMs, roMs int, err error) {
 	rwMs, err = db.RWBusyTimeout()
 	if err != nil {
