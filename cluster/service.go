@@ -437,38 +437,39 @@ func (s *Service) authorized(c *proto.Command) bool {
 }
 
 // errorResponse returns the encoded response telling a client that its
-// command of the given type was rejected, and why. The encoding matches
+// command of the given type was rejected, and why. A rejected command is the
+// last one on its connection, and the response says so. The encoding matches
 // what the client expects for that command type.
 func errorResponse(t proto.Command_Type, errStr string) ([]byte, error) {
 	var m pb.Message
 	switch t {
 	case proto.Command_COMMAND_TYPE_EXECUTE:
-		m = &proto.CommandExecuteResponse{Error: errStr}
+		m = &proto.CommandExecuteResponse{Error: errStr, CloseConnection: true}
 	case proto.Command_COMMAND_TYPE_QUERY:
-		m = &proto.CommandQueryResponse{Error: errStr}
+		m = &proto.CommandQueryResponse{Error: errStr, CloseConnection: true}
 	case proto.Command_COMMAND_TYPE_REQUEST:
-		m = &proto.CommandRequestResponse{Error: errStr}
+		m = &proto.CommandRequestResponse{Error: errStr, CloseConnection: true}
 	case proto.Command_COMMAND_TYPE_BACKUP,
 		proto.Command_COMMAND_TYPE_BACKUP_STREAM:
-		m = &proto.CommandBackupResponse{Error: errStr}
+		m = &proto.CommandBackupResponse{Error: errStr, CloseConnection: true}
 	case proto.Command_COMMAND_TYPE_LOAD:
-		m = &proto.CommandLoadResponse{Error: errStr}
+		m = &proto.CommandLoadResponse{Error: errStr, CloseConnection: true}
 	case proto.Command_COMMAND_TYPE_LOAD_CHUNK:
-		m = &proto.CommandLoadChunkResponse{Error: errStr}
+		m = &proto.CommandLoadChunkResponse{Error: errStr, CloseConnection: true}
 	case proto.Command_COMMAND_TYPE_REMOVE_NODE:
-		m = &proto.CommandRemoveNodeResponse{Error: errStr}
+		m = &proto.CommandRemoveNodeResponse{Error: errStr, CloseConnection: true}
 	case proto.Command_COMMAND_TYPE_DEMOTE_NODE:
-		m = &proto.CommandDemoteNodeResponse{Error: errStr}
+		m = &proto.CommandDemoteNodeResponse{Error: errStr, CloseConnection: true}
 	case proto.Command_COMMAND_TYPE_PROMOTE_NODE:
-		m = &proto.CommandPromoteNodeResponse{Error: errStr}
+		m = &proto.CommandPromoteNodeResponse{Error: errStr, CloseConnection: true}
 	case proto.Command_COMMAND_TYPE_NOTIFY:
-		m = &proto.CommandNotifyResponse{Error: errStr}
+		m = &proto.CommandNotifyResponse{Error: errStr, CloseConnection: true}
 	case proto.Command_COMMAND_TYPE_JOIN:
-		m = &proto.CommandJoinResponse{Error: errStr}
+		m = &proto.CommandJoinResponse{Error: errStr, CloseConnection: true}
 	case proto.Command_COMMAND_TYPE_STEPDOWN:
-		m = &proto.CommandStepdownResponse{Error: errStr}
+		m = &proto.CommandStepdownResponse{Error: errStr, CloseConnection: true}
 	case proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE:
-		m = &proto.HighwaterMarkUpdateResponse{Error: errStr}
+		m = &proto.HighwaterMarkUpdateResponse{Error: errStr, CloseConnection: true}
 	default:
 		return nil, fmt.Errorf("no response type for command %s", t)
 	}
@@ -658,7 +659,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			br := c.GetBackupRequest()
 			if br == nil {
 				// Nothing to stream. Tell the client and end the connection.
-				resp := &proto.CommandBackupResponse{Error: "BackupRequest is nil"}
+				resp := &proto.CommandBackupResponse{Error: "BackupRequest is nil", CloseConnection: true}
 				marshalAndWrite(conn, resp)
 				return
 			}
