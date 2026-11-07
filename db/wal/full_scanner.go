@@ -52,15 +52,23 @@ func (f *FullScanner) Header() (*WALHeader, error) {
 // on the next call to Next. Callers that retain a Frame across Next calls
 // must copy Data first.
 func (f *FullScanner) Next() (*Frame, error) {
+	prev := [2]uint32{f.reader.chksum1, f.reader.chksum2}
+
 	pgno, commit, err := f.reader.ReadFrame(f.pageBuf)
 	if err != nil {
 		return nil, err
 	}
 
+	// ReadFrame verifies the checksum chain, so the source checksums are known
+	// without hashing anything again. A full copy does not change any frame
+	// bytes, so reporting the transition lets the Writer skip that work.
 	frame := &Frame{
-		Pgno:   pgno,
-		Commit: commit,
-		Data:   f.pageBuf,
+		Pgno:         pgno,
+		Commit:       commit,
+		Data:         f.pageBuf,
+		Prev:         prev,
+		Source:       f.reader.frameChecksum(),
+		HasChecksums: true,
 	}
 	return frame, nil
 }
