@@ -29,6 +29,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // tmpSuffix is the suffix given to the temporary directory used to stage a
@@ -70,6 +71,32 @@ func CopyDir(src string, dst string) error {
 	// out any remains of an earlier interrupted copy. The deferred removal is a
 	// no-op once the rename below has succeeded.
 	tmp := dst + tmpSuffix
+	// Never remove the source as part of clearing an old staging directory.
+	// Resolve aliases before checking whether the source is inside it.
+	if _, err := os.Stat(tmp); err == nil {
+		sourcePath, err := filepath.EvalSymlinks(src)
+		if err != nil {
+			return err
+		}
+		sourcePath, err = filepath.Abs(sourcePath)
+		if err != nil {
+			return err
+		}
+		stagePath, err := filepath.EvalSymlinks(tmp)
+		if err != nil {
+			return err
+		}
+		stagePath, err = filepath.Abs(stagePath)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(stagePath, sourcePath)
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			return fmt.Errorf("source is inside staging directory")
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
 	if err := RemoveAll(tmp); err != nil {
 		return err
 	}
