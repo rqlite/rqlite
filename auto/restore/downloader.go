@@ -1,6 +1,7 @@
 package restore
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/rqlite/rqlite/v10/auto/crypto"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
@@ -19,6 +21,7 @@ var stats *expvar.Map
 
 var (
 	gzipMagic = []byte{0x1f, 0x8b, 0x08}
+	ageMagic  = []byte("age-encryption.org/v1\n")
 )
 
 const (
@@ -67,6 +70,7 @@ func DownloadFile(ctx context.Context, cfgPath string) (path string, errOK bool,
 		return "", false, fmt.Errorf("failed to create storage client: %s", err.Error())
 	}
 	d := NewDownloader(sc)
+	d.SetDecryptionKeys(dCfg.DecryptionKeys)
 
 	// Create a temporary file to download to.
 	f, err = os.CreateTemp("", "rqlite-auto-restore")
@@ -89,8 +93,9 @@ type StorageClient interface {
 
 // Downloader is a struct that handles downloading data from a storage service.
 type Downloader struct {
-	storageClient StorageClient
-	logger        *log.Logger
+	storageClient  StorageClient
+	logger         *log.Logger
+	decryptionKeys string
 }
 
 // NewDownloader creates a new Downloader instance with the given StorageClient.
@@ -101,7 +106,15 @@ func NewDownloader(storageClient StorageClient) *Downloader {
 	}
 }
 
+// SetDecryptionKeys sets the age private identities used to decrypt downloads.
+// An empty string disables decryption. Call this before Do.
+func (d *Downloader) SetDecryptionKeys(keys string) {
+	d.decryptionKeys = keys
+}
+
 // Do downloads data from the storage service and writes it to the provided writer.
+// If decryption fails, earlier authenticated chunks may already have been written.
+// The caller must discard the output if Do returns an error.
 func (d *Downloader) Do(ctx context.Context, w io.Writer, timeout time.Duration) (err error) {
 	var cw *countingWriterAt
 	defer func() {
@@ -132,25 +145,47 @@ func (d *Downloader) Do(ctx context.Context, w io.Writer, timeout time.Duration)
 		return err
 	}
 
-	// Check if the downloaded data is gzip compressed.
-	compressed, err := isGzip(f)
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	r := bufio.NewReader(f)
+	if d.decryptionKeys != "" {
+		decrypted, err := crypto.NewDecryptReader(r, d.decryptionKeys)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt data: %w", err)
+		}
+		r = bufio.NewReader(decrypted)
+	} else {
+		encrypted, err := isAge(r)
+		if err != nil {
+			return err
+		}
+		if encrypted {
+			return fmt.Errorf("backup is encrypted, but no decryption_keys configured")
+		}
+	}
+
+	// Check for gzip after decryption, without consuming the stream prefix.
+	compressed, err := isGzip(r)
 	if err != nil {
 		return err
 	}
 
 	if compressed {
-		gzr, err := gzip.NewReader(f)
+		gzr, err := gzip.NewReader(r)
 		if err != nil {
 			return err
 		}
 		defer gzr.Close()
 
+		// Keep gzip's default multistream mode so EOF also requires consuming
+		// the underlying stream, including age's final authentication check.
 		_, err = io.Copy(w, gzr)
 		if err != nil {
 			return fmt.Errorf("failed to decompress data: %s", err)
 		}
 	} else {
-		_, err = io.Copy(w, f)
+		_, err = io.Copy(w, r)
 		if err != nil {
 			return fmt.Errorf("failed to write data: %s", err)
 		}
@@ -169,28 +204,21 @@ func (c *countingWriterAt) WriteAt(p []byte, off int64) (n int, err error) {
 	return
 }
 
-// isGzip returns true if the data in the reader is gzip compressed.
-// It does this by reading the first three bytes of the reader, and checking
-// if they match the gzip magic number. When f is returned it will be
-// positioned at the start of the reader.
-func isGzip(f io.ReadSeeker) (bool, error) {
-	_, err := f.Seek(0, io.SeekStart)
-	if err != nil {
+// isGzip reports whether the stream starts with the gzip magic bytes without
+// consuming them.
+func isGzip(r *bufio.Reader) (bool, error) {
+	data, err := r.Peek(len(gzipMagic))
+	if err != nil && err != io.EOF {
 		return false, err
 	}
-	data := make([]byte, len(gzipMagic))
-	n, err := f.Read(data)
-	if err != nil {
-		return false, err
-	}
-	if n != len(gzipMagic) {
-		return false, nil
-	}
+	return bytes.Equal(gzipMagic, data), nil
+}
 
-	_, err = f.Seek(0, io.SeekStart)
-	if err != nil {
+// isAge reports whether the stream starts with the age header without consuming it.
+func isAge(r *bufio.Reader) (bool, error) {
+	data, err := r.Peek(len(ageMagic))
+	if err != nil && err != io.EOF {
 		return false, err
 	}
-
-	return bytes.Equal(gzipMagic, data[0:len(gzipMagic)]), nil
+	return bytes.Equal(ageMagic, data), nil
 }
