@@ -854,61 +854,39 @@ func (c *Client) dialWithOption(nodeAddr string, forceNew bool) (net.Conn, error
 	return pl.Get()
 }
 
-// retry retries a command on a remote node. It does this so we churn through connections
-// in the pool if we hit an error, as the remote node may have restarted and the pool's
-// connections are now stale.
+// retry sends a command once, followed by at most maxRetries additional attempts.
+// Retries use fresh connections to avoid exhausting a pool of stale connections.
 func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr string, timeout time.Duration, maxRetries int) ([]byte, int, error) {
-	var p []byte
-	var errOuter error
-	effectiveRetries := max(1, maxRetries)
+	maxRetries = max(0, maxRetries)
 	nRetries := 0
-
-	for {
+	for attempt := 0; ; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return nil, nRetries, err
 		}
-		p, errOuter = func() ([]byte, error) {
-			conn, errInner := c.dial(nodeAddr)
-			if errInner != nil {
-				return nil, errInner
-			}
-			defer conn.Close()
-
-			b, errInner := writeCommandReadResponse(conn, command, timeout)
-			if errInner != nil {
-				handleConnError(conn)
-				return nil, errInner
-			}
-
-			return b, nil
-		}()
-		if errOuter == nil {
-			break
+		if attempt > 0 {
+			nRetries++
+			stats.Add(numClientRetries, 1)
 		}
-		nRetries++
-		stats.Add(numClientRetries, 1)
-
-		// If we're on the last retry, then try one more time with an explicitly new connection.
-		// We do this because it's possible that the remote node restarted and all the connections
-		// in the pool are stale, but we just don't know it. This is a last-ditch effort to get a
-		// successful response before giving up.
-		if nRetries == effectiveRetries {
-			conn, err := c.dialWithOption(nodeAddr, true)
+		p, err := func() ([]byte, error) {
+			conn, err := c.dialWithOption(nodeAddr, attempt > 0)
 			if err != nil {
-				return nil, nRetries, err
+				return nil, err
 			}
 			defer conn.Close()
-			c.numForcedNewConns.Add(1)
-			stats.Add(numClientForceNewConn, 1)
-
-			if p, err = writeCommandReadResponse(conn, command, timeout); err != nil {
-				handleConnError(conn)
-				return nil, nRetries, err
+			if attempt > 0 {
+				c.numForcedNewConns.Add(1)
+				stats.Add(numClientForceNewConn, 1)
 			}
-			break
+			p, err := writeCommandReadResponse(conn, command, timeout)
+			if err != nil {
+				handleConnError(conn)
+			}
+			return p, err
+		}()
+		if err == nil || attempt == maxRetries {
+			return p, attempt, err
 		}
 	}
-	return p, nRetries, nil
 }
 
 func writeCommandReadResponse(conn net.Conn, c *proto.Command, timeout time.Duration) (buf []byte, retErr error) {

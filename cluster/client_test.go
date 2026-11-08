@@ -711,7 +711,7 @@ func Test_ClientRetry_FailAllPoolThenFreshSucceeds(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
-		srv.Addr(), nil, time.Second, 0)
+		srv.Addr(), nil, time.Second, 1)
 	if err != nil {
 		t.Fatalf("expected fresh connection to succeed, got: %s", err)
 	}
@@ -736,14 +736,13 @@ func Test_ClientRetry_AllAttemptsFail(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when all attempts fail")
 	}
-	if exp, got := int32(1), c.numForcedNewConns.Load(); exp != got {
+	if exp, got := int32(0), c.numForcedNewConns.Load(); exp != got {
 		t.Fatalf("expected %d forced new connection, got %d", exp, got)
 	}
 }
 
 func Test_ClientRetry_SuccessMidPool(t *testing.T) {
-	// With maxRetries=3, fail the first 2 pool attempts, succeed on the 3rd.
-	// The fresh dial should never be needed.
+	// Fail twice, then succeed using the second permitted fresh retry.
 	var connCount int
 	var mu sync.Mutex
 	srv := servicetest.NewService()
@@ -777,7 +776,7 @@ func Test_ClientRetry_SuccessMidPool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected success on 3rd pool attempt, got: %s", err)
 	}
-	if exp, got := int32(0), c.numForcedNewConns.Load(); exp != got {
+	if exp, got := int32(2), c.numForcedNewConns.Load(); exp != got {
 		t.Fatalf("expected %d forced new connection, got %d", exp, got)
 	}
 }
@@ -805,7 +804,7 @@ func Test_ClientRetry_ZeroMaxRetries_NoInfiniteLoop(t *testing.T) {
 	if ctx.Err() != nil {
 		t.Fatal("retry loop did not terminate before context timeout — possible infinite loop")
 	}
-	if exp, got := int32(1), c.numForcedNewConns.Load(); exp != got {
+	if exp, got := int32(0), c.numForcedNewConns.Load(); exp != got {
 		t.Fatalf("expected %d forced new connection, got %d", exp, got)
 	}
 }
