@@ -1499,7 +1499,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 	var fc queue.FlushChannel
 	if qp.Wait() {
 		stats.Add(numQueuedExecutionsWait, 1)
-		fc = make(queue.FlushChannel)
+		fc = make(queue.FlushChannel, 1)
 	}
 
 	seqNum, err := s.stmtQueue.Write(stmts, fc)
@@ -1512,8 +1512,12 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 	if qp.Wait() {
 		// Wait for the flush channel to close, or timeout.
 		select {
-		case <-fc:
-			break
+		case err := <-fc:
+			if err != nil {
+				// The batch holding this write never reached Raft.
+				http.Error(w, fmt.Sprintf("queued write failed: %s", err.Error()), http.StatusServiceUnavailable)
+				return
+			}
 		case <-time.NewTimer(qp.Timeout(defaultTimeout)).C:
 			stats.Add(numQueuedExecutionsWaitTimeout, 1)
 			http.Error(w, "queue wait timeout", http.StatusRequestTimeout)
@@ -1934,7 +1938,6 @@ func (s *Service) runQueue() {
 	defer close(s.queueDone)
 	retryDelay := time.Second
 
-	var err error
 	for {
 		select {
 		case <-s.closeCh:
@@ -1948,6 +1951,7 @@ func (s *Service) runQueue() {
 			}
 			stats.Add(numQueuedExecutionsStmtsRx, int64(len(req.Objects)))
 
+			var err error
 			// Nil statements are valid, as clients may want to just send
 			// a "checkpoint" through the queue.
 			if er.Request.Statements != nil {
@@ -1991,6 +1995,13 @@ func (s *Service) runQueue() {
 					stats.Add(numQueuedExecutionsFailed, 1)
 					time.Sleep(retryDelay)
 				}
+			}
+
+			if err != nil {
+				// Retry limit reached: tell any waiters the write failed,
+				// and don't record it as written.
+				req.Fail(err)
+				continue
 			}
 
 			// Perform post-write processing.

@@ -1201,6 +1201,53 @@ func Test_QueuedExecuteNoLeader(t *testing.T) {
 	}
 }
 
+func Test_QueuedExecuteWaitFailure(t *testing.T) {
+	var fail atomic.Bool
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+		executeFn: func(*command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+			if fail.Load() {
+				return nil, 0, errors.New("leadership lost while committing log")
+			}
+			return nil, 0, nil
+		},
+	}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	s.SetQueueMaxRetry(0) // The first failed write reaches the retry limit.
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	post := func() *httptest.ResponseRecorder {
+		rr := httptest.NewRecorder()
+		s.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/db/execute?queue&wait&timeout=5s",
+			strings.NewReader(`["INSERT INTO foo(name) VALUES('fiona')"]`)))
+		return rr
+	}
+
+	// A write that succeeds is acknowledged, and its sequence number recorded.
+	rr := post()
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", rr.Code, rr.Body)
+	}
+	seqNum := atomic.LoadInt64(&s.seqNum)
+	if seqNum == 0 {
+		t.Fatalf("sequence number not recorded after successful write")
+	}
+
+	// A write that never reaches Raft is reported as failed, and not recorded.
+	fail.Store(true)
+	rr = post()
+	if rr.Code != http.StatusServiceUnavailable || !strings.Contains(rr.Body.String(), "leadership lost") {
+		t.Fatalf("status=%d, want 503 with error; body: %s", rr.Code, rr.Body)
+	}
+	if got := atomic.LoadInt64(&s.seqNum); got != seqNum {
+		t.Fatalf("sequence number=%d, want unchanged %d", got, seqNum)
+	}
+}
+
 func Test_Licenses(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
