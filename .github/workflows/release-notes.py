@@ -1,12 +1,17 @@
 #!/usr/bin/env python
 
+import re
 import sys
+from pathlib import Path
+
 import requests
+
+CHANGELOG_PATH = Path(__file__).resolve().parents[2] / 'CHANGELOG.md'
 
 release_template = """
 _rqlite_ is a lightweight, user-friendly, distributed relational database, which uses [SQLite](https://www.sqlite.org/) as its storage engine. rqlite provides easy-to-use, fault-tolerant and highly-available storage for your most important data. You can learn a lot more about rqlite at [rqlite.io](https://www.rqlite.io).
 
-See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on {release}, and check out the _Assets_ section below for prebuilt binaries.
+{notes}
 
 ## Getting started
 _Check out the [Quick Start guide](https://rqlite.io/docs/quick-start/)._
@@ -65,6 +70,57 @@ You can download a pre-built release for Windows in one of two ways:
 - Download the Win64 [build artifact attached to this release](https://github.com/rqlite/rqlite/releases/download/{release}/rqlite-{release}-win64.zip).
 """
 
+notes_template = """## What's changed
+{section}
+
+See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for the full history of changes, and check out the _Assets_ section below for prebuilt binaries."""
+
+notes_fallback = """See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on {release}, and check out the _Assets_ section below for prebuilt binaries."""
+
+def changelog_section(text, tag):
+    """Return the body of the CHANGELOG section for tag, or None if absent.
+
+    A section starts at a level-2 heading whose first word is the tag,
+    e.g. '## v10.6.6 (October 28th 2026)', and ends at the next level-2
+    heading. Lines inside fenced code blocks are never treated as headings.
+    """
+    heading = re.compile(r'^##\s+(\S+)')
+    body, in_section, in_fence = [], False, False
+    for line in text.splitlines():
+        if line.lstrip().startswith(('```', '~~~')):
+            in_fence = not in_fence
+        m = None if in_fence else heading.match(line)
+        if m:
+            if in_section:
+                break
+            in_section = m.group(1) == tag
+            continue
+        if in_section:
+            body.append(line)
+    if not in_section:
+        return None
+    section = '\n'.join(body).strip()
+    return section or None
+
+def release_notes(tag, changelog_path=CHANGELOG_PATH):
+    """Render the release body for tag.
+
+    The tag's CHANGELOG section is included when it can be found. Otherwise
+    the body just links to the CHANGELOG, so a missing or renamed section
+    never fails the release.
+    """
+    section = None
+    try:
+        section = changelog_section(changelog_path.read_text(encoding='utf-8'), tag)
+    except OSError as e:
+        print(f'warning: could not read {changelog_path}: {e}', file=sys.stderr)
+    if section is None:
+        print(f'warning: no CHANGELOG section found for {tag}', file=sys.stderr)
+        notes = notes_fallback.format(release=tag)
+    else:
+        notes = notes_template.format(section=section)
+    return release_template.format(release=tag, version=tag.lstrip('v'), notes=notes)
+
 def set_release_notes(token, release_id, notes):
     headers = {
         'Authorization': f'token {token}',
@@ -80,15 +136,19 @@ def set_release_notes(token, release_id, notes):
     return response.json()['id']
 
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == '--dry-run' and sys.argv[2]:
+        print(release_notes(sys.argv[2]))
+        return
+
     if len(sys.argv) != 4 or not all(sys.argv[1:]):
         print("Usage: python release-notes.py <GITHUB_TOKEN> <RELEASE ID> <TAG>")
+        print("       python release-notes.py --dry-run <TAG>")
         sys.exit(1)
 
     token = sys.argv[1]
     release_id = sys.argv[2]
     tag = sys.argv[3]
-    version = tag.lstrip('v')
-    set_release_notes(token, release_id, release_template.format(release=tag, version=version))
+    set_release_notes(token, release_id, release_notes(tag))
 
 if __name__ == "__main__":
     main()
