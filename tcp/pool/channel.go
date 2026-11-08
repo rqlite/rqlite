@@ -46,22 +46,30 @@ func (c *channelPool) Get() (net.Conn, error) {
 		return nil, ErrClosed
 	}
 
-	// Wrap our connections with our custom net.Conn implementation (wrapConn
-	// method) that puts the connection back to the pool if it's closed.
-	select {
-	case conn := <-conns:
-		if conn == nil {
-			return nil, ErrClosed
+	// Inspect only the idle connections present at checkout. This bounds work
+	// even when other goroutines continually return connections to the pool.
+	for remaining := len(conns); remaining > 0; remaining-- {
+		select {
+		case conn := <-conns:
+			if conn == nil {
+				return nil, ErrClosed
+			}
+			if connClosed(conn) {
+				conn.Close()
+				atomic.AddInt64(&c.nOpenConns, -1)
+				continue
+			}
+			return c.wrapConn(conn), nil
+		default:
+			remaining = 0
 		}
-		return c.wrapConn(conn), nil
-	default:
-		conn, err := factory()
-		if err != nil {
-			return nil, err
-		}
-		atomic.AddInt64(&c.nOpenConns, 1)
-		return c.wrapConn(conn), nil
 	}
+	conn, err := factory()
+	if err != nil {
+		return nil, err
+	}
+	atomic.AddInt64(&c.nOpenConns, 1)
+	return c.wrapConn(conn), nil
 }
 
 // New creates a new connection via the factory, bypassing any idle connections
