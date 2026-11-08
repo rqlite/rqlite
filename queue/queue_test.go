@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -330,6 +331,36 @@ func Test_QueueWriteNilSingleChan(t *testing.T) {
 	default:
 		// Not closed, something is wrong.
 		t.Fatalf("flush channel not closed")
+	}
+}
+
+func Test_QueueRequestFail(t *testing.T) {
+	q := New[*command.Statement](1024, 2, 60*time.Second)
+	defer q.Close()
+
+	// Two writes with buffered flush channels are merged into one batch.
+	fc1, fc2 := make(FlushChannel, 1), make(FlushChannel, 1)
+	for _, fc := range []FlushChannel{fc1, fc2} {
+		if _, err := q.Write(testStmtsFoo, fc); err != nil {
+			t.Fatalf("failed to write: %s", err.Error())
+		}
+	}
+
+	select {
+	case req := <-q.C:
+		req.Fail(errors.New("not leader"))
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for statements")
+	}
+
+	// Every waiter receives the error, and then its channel is closed.
+	for i, fc := range []FlushChannel{fc1, fc2} {
+		if err := <-fc; err == nil || err.Error() != "not leader" {
+			t.Fatalf("flush channel %d: got %v, want error", i, err)
+		}
+		if _, ok := <-fc; ok {
+			t.Fatalf("flush channel %d not closed", i)
+		}
 	}
 }
 

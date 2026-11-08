@@ -32,8 +32,10 @@ func ResetStats() {
 }
 
 // FlushChannel is the type passed to the Queue, if the caller wants
-// to know when a specific set of objects has been processed.
-type FlushChannel chan bool
+// to know when a specific set of objects has been processed. It is
+// closed once processing ends. If processing failed, the error is sent
+// on it before it is closed, so give it a buffer of 1 to receive errors.
+type FlushChannel chan error
 
 // Request represents a batch of objects to be processed.
 type Request[T any] struct {
@@ -45,6 +47,18 @@ type Request[T any] struct {
 // Close closes a request, closing any associated flush channels.
 func (r *Request[T]) Close() {
 	for _, c := range r.flushChans {
+		close(c)
+	}
+}
+
+// Fail closes a request whose processing failed, sending err on any
+// associated flush channels before closing them.
+func (r *Request[T]) Fail(err error) {
+	for _, c := range r.flushChans {
+		select {
+		case c <- err:
+		default: // Unbuffered channel with no reader waiting.
+		}
 		close(c)
 	}
 }
