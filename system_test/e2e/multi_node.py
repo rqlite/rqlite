@@ -561,11 +561,13 @@ class TestEndToEndConnectionPools(unittest.TestCase):
     self.assertEqual(n.node_id, l0.node_id)
 
     # Now, the followers have connection pools, but the connections within are stale.
-    # Ensure the followers detect this and use a fresh connection to the leader.
+    # Ensure the followers detect this, discard the stale connections, and use a
+    # fresh connection to the leader.
     for f in self.cluster.followers():
       j = f.query('SELECT 1', level="strong")
       self.assertEqual(j, d_("{'results': [{'values': [[1]], 'types': ['integer'], 'columns': ['1']}]}"))
-      self.assertEqual(f.expvar()['cluster']['num_client_force_new_conn'], 1)
+      pools = f.status()['http']['cluster']['conn_pool_stats'].values()
+      self.assertGreaterEqual(sum(p['stale_discarded'] for p in pools), 1)
 
 class TestEndToEndNonVoter(unittest.TestCase):
   def setUp(self):
