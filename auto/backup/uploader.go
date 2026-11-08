@@ -38,8 +38,9 @@ type DataProvider interface {
 	// last modified by.
 	LastIndex() (uint64, error)
 
-	// Provide writes the data-for-upload to the writer.
-	Provide(w io.WriteSeeker) error
+	// Provide writes the data-for-upload to the writer. A failed call may
+	// leave partial data in the writer.
+	Provide(w io.Writer) error
 }
 
 // stats captures stats for the Uploader service.
@@ -78,6 +79,9 @@ type Uploader struct {
 	dataProvider  DataProvider
 	interval      time.Duration
 
+	nRetries      int           // Number of times to retry a failed Provide.
+	retryInterval time.Duration // Time to wait between Provide attempts.
+
 	logger             *log.Logger
 	lastUploadTime     time.Time
 	lastUploadDuration time.Duration
@@ -91,6 +95,8 @@ func NewUploader(storageClient StorageClient, dataProvider DataProvider, interva
 		storageClient: storageClient,
 		dataProvider:  dataProvider,
 		interval:      interval,
+		nRetries:      10,
+		retryInterval: 500 * time.Millisecond,
 		logger:        log.New(os.Stderr, "[uploader] ", log.LstdFlags),
 	}
 }
@@ -147,17 +153,32 @@ func (u *Uploader) upload(ctx context.Context) error {
 		return nil
 	}
 
-	// Create a temporary file for the data to be uploaded
-	fd, err := tempFD()
-	if err != nil {
-		return err
+	// Write the data to be uploaded to a temporary file. Each attempt gets
+	// a new file, so a failed attempt cannot leave partial data behind for
+	// a later, smaller, attempt to upload.
+	var fd *os.File
+	for n := 0; ; n++ {
+		fd, err = tempFD()
+		if err != nil {
+			return err
+		}
+		err = u.dataProvider.Provide(fd)
+		if err == nil {
+			break
+		}
+		fd.Close()
+		fsutil.Remove(fd.Name())
+		if n >= u.nRetries {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(u.retryInterval):
+		}
 	}
 	defer fsutil.Remove(fd.Name())
 	defer fd.Close()
-
-	if err := u.dataProvider.Provide(fd); err != nil {
-		return err
-	}
 
 	if u.lastIndex == 0 {
 		// No last index, so this must be the first upload since this
