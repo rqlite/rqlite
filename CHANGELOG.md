@@ -4,7 +4,7 @@
 - [PR #3005](https://github.com/rqlite/rqlite/pull/3005): Support CMEK for automatic backups to Google Cloud Storage.
 
 ### Implementation changes and bug fixes
-- [PR #XXXX](https://github.com/rqlite/rqlite/pull/XXXX): Discard WAL files staged by a failed incremental snapshot when the database is replaced by a load, boot, or restore, so they are not packaged on top of the new database.
+- [PR #3026](https://github.com/rqlite/rqlite/pull/XXXX): Discard WAL files staged by a failed incremental snapshot when the database is replaced by a load, boot, or restore, so they are not packaged on top of the new database.
 - [PR #3015](https://github.com/rqlite/rqlite/pull/3015): Preserve integer precision when selecting fields from the HTTP status response.
 - [PR #3016](https://github.com/rqlite/rqlite/pull/3016): Preserve non-voting nodes in the Store bootstrap configuration.
 - [PR #3021](https://github.com/rqlite/rqlite/pull/3021): Reject malformed queued-write requests with the wait flag while preserving empty-array and null requests used to wait for the queue to flush.
