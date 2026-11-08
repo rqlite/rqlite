@@ -11,6 +11,8 @@ CHANGELOG_PATH = Path(__file__).resolve().parents[2] / 'CHANGELOG.md'
 release_template = """
 _rqlite_ is a lightweight, user-friendly, distributed relational database, which uses [SQLite](https://www.sqlite.org/) as its storage engine. rqlite provides easy-to-use, fault-tolerant and highly-available storage for your most important data. You can learn a lot more about rqlite at [rqlite.io](https://www.rqlite.io).
 
+Check out the _Assets_ section below for prebuilt binaries.
+
 {notes}
 
 ## Getting started
@@ -73,9 +75,9 @@ You can download a pre-built release for Windows in one of two ways:
 notes_template = """## What's changed
 {changes}
 
-See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for the full history of changes, and check out the _Assets_ section below for prebuilt binaries."""
+See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for the full history of changes"""
 
-notes_fallback = """See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on {release}, and check out the _Assets_ section below for prebuilt binaries."""
+notes_fallback = """See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on {release}."""
 
 # Subsections collapsed on the release page. Anything else, such as new
 # features or upgrade notes, is shown inline.
