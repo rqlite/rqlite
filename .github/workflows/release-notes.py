@@ -74,8 +74,7 @@ You can download a pre-built release for Windows in one of two ways:
 
 notes_template = """## What's changed
 {changes}
-
-See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for the full history of changes"""
+"""
 
 notes_fallback = """See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on {release}."""
 
