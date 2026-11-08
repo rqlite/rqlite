@@ -4,6 +4,7 @@
 - [PR #3005](https://github.com/rqlite/rqlite/pull/3005): Support CMEK for automatic backups to Google Cloud Storage.
 
 ### Implementation changes and bug fixes
+- [PR #3022](https://github.com/rqlite/rqlite/pull/3022): Replace credentials and permissions only after validating the complete auth configuration, leaving the store unchanged on failure.
 - [PR #3015](https://github.com/rqlite/rqlite/pull/3015): Preserve integer precision when selecting fields from the HTTP status response.
 - [PR #3016](https://github.com/rqlite/rqlite/pull/3016): Preserve non-voting nodes in the Store bootstrap configuration.
 - [PR #3021](https://github.com/rqlite/rqlite/pull/3021): Reject malformed queued-write requests with the wait flag while preserving empty-array and null requests used to wait for the queue to flush.
