@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"io"
-	"time"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
 )
@@ -14,9 +13,6 @@ type Provider struct {
 	str      *Store
 	vacuum   bool
 	compress bool
-
-	nRetries      int
-	retryInterval time.Duration
 }
 
 // NewProvider returns a new instance of Provider. If v is true, the
@@ -24,11 +20,9 @@ type Provider struct {
 // true, the SQLite database will be compressed before being provided.
 func NewProvider(s *Store, v, c bool) *Provider {
 	return &Provider{
-		str:           s,
-		vacuum:        v,
-		compress:      c,
-		nRetries:      10,
-		retryInterval: 500 * time.Millisecond,
+		str:      s,
+		vacuum:   v,
+		compress: c,
 	}
 }
 
@@ -39,10 +33,11 @@ func (p *Provider) LastIndex() (uint64, error) {
 	return p.str.DBAppliedIndex(), nil
 }
 
-// Provide writes the SQLite database to w, starting at the beginning of w.
-// Any existing content of w is overwritten. If the backup fails it is retried
-// a fixed number of times before the last error is returned.
-func (p *Provider) Provide(w io.WriteSeeker) (retErr error) {
+// Provide writes the SQLite database to w. A backup can fail transiently, for
+// example while the Store is snapshotting, and a failed attempt may leave a
+// partial backup in w. The caller decides whether to retry, and must do so
+// with a fresh writer.
+func (p *Provider) Provide(w io.Writer) (retErr error) {
 	stats.Add(numProviderProvides, 1)
 	defer func() {
 		if retErr != nil {
@@ -55,20 +50,6 @@ func (p *Provider) Provide(w io.WriteSeeker) (retErr error) {
 		Vacuum:   p.vacuum,
 		Compress: p.compress,
 	}
-	nRetries := 0
-	for {
-		if _, err := w.Seek(0, io.SeekStart); err != nil {
-			return err
-		}
-		_, err := p.str.Backup(context.Background(), br, w)
-		if err == nil {
-			break
-		}
-		time.Sleep(p.retryInterval)
-		nRetries++
-		if nRetries > p.nRetries {
-			return err
-		}
-	}
-	return nil
+	_, err := p.str.Backup(context.Background(), br, w)
+	return err
 }

@@ -178,6 +178,78 @@ func Test_UploaderFailThenOK(t *testing.T) {
 	}
 }
 
+// Test_UploaderProvideFailThenOK tests that a failed Provide is retried, and
+// that partial data written by the failed attempt is not uploaded.
+func Test_UploaderProvideFailThenOK(t *testing.T) {
+	ResetStats()
+	var uploadedData []byte
+	sc := &mockStorageClient{
+		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
+			var err error
+			uploadedData, err = io.ReadAll(reader)
+			return err
+		},
+	}
+	provideCount := 0
+	dp := &mockDataProvider{}
+	dp.provideFn = func(w io.Writer) error {
+		provideCount++
+		if provideCount == 1 {
+			// Write more than the real data, then fail.
+			if _, err := w.Write([]byte("partial data from a failed attempt")); err != nil {
+				return err
+			}
+			return fmt.Errorf("failed to provide")
+		}
+		_, err := w.Write([]byte("my upload data"))
+		return err
+	}
+	uploader := NewUploader(sc, dp, time.Second)
+	uploader.retryInterval = time.Millisecond
+
+	if err := uploader.upload(context.Background()); err != nil {
+		t.Fatalf("upload failed: %s", err)
+	}
+	if exp, got := 2, provideCount; exp != got {
+		t.Errorf("expected Provide to be called %d times, got %d", exp, got)
+	}
+	if exp, got := "my upload data", string(uploadedData); exp != got {
+		t.Errorf("expected uploadedData to be %q, got %q", exp, got)
+	}
+}
+
+// Test_UploaderProvideRetriesExhausted tests that a Provide which keeps failing
+// is attempted nRetries+1 times and then returns the error.
+func Test_UploaderProvideRetriesExhausted(t *testing.T) {
+	ResetStats()
+	uploadCount := 0
+	sc := &mockStorageClient{
+		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
+			uploadCount++
+			return nil
+		},
+	}
+	provideCount := 0
+	dp := &mockDataProvider{}
+	dp.provideFn = func(w io.Writer) error {
+		provideCount++
+		return fmt.Errorf("failed to provide")
+	}
+	uploader := NewUploader(sc, dp, time.Second)
+	uploader.nRetries = 2
+	uploader.retryInterval = time.Millisecond
+
+	if err := uploader.upload(context.Background()); err == nil {
+		t.Fatalf("expected upload to fail")
+	}
+	if exp, got := 3, provideCount; exp != got {
+		t.Errorf("expected Provide to be called %d times, got %d", exp, got)
+	}
+	if exp, got := 0, uploadCount; exp != got {
+		t.Errorf("expected Upload to be called %d times, got %d", exp, got)
+	}
+}
+
 func Test_UploaderOKThenFail(t *testing.T) {
 	ResetStats()
 	var uploadedData []byte
@@ -342,6 +414,7 @@ type mockDataProvider struct {
 	data        string
 	err         error
 	lastIndexFn func() (uint64, error)
+	provideFn   func(w io.Writer) error
 }
 
 func (mp *mockDataProvider) LastIndex() (uint64, error) {
@@ -351,7 +424,10 @@ func (mp *mockDataProvider) LastIndex() (uint64, error) {
 	return 1, nil
 }
 
-func (mp *mockDataProvider) Provide(w io.WriteSeeker) error {
+func (mp *mockDataProvider) Provide(w io.Writer) error {
+	if mp.provideFn != nil {
+		return mp.provideFn(w)
+	}
 	if mp.err != nil {
 		return mp.err
 	}
