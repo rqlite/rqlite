@@ -199,6 +199,74 @@ func Test_AuthLoadDuplicateUsername(t *testing.T) {
 	}
 }
 
+func Test_AuthLoadErrorPreservesCredentials(t *testing.T) {
+	for _, suffix := range []string{
+		`, {"username":"invalid"}]`,
+		`, {"username":"*","perms":["query"]}]`,
+		`, {"username":"existing","password":"changed","perms":["all"]}]`,
+		`] trailing`,
+		`] []`,
+		``,
+	} {
+		t.Run(suffix, func(t *testing.T) {
+			store := NewCredentialsStore()
+			if err := store.Load(strings.NewReader(`[{"username":"existing","password":"secret","perms":["query"]}]`)); err != nil {
+				t.Fatal(err)
+			}
+			input := `[{"username":"existing","password":"changed","perms":["all"]},{"username":"new","password":"new-secret","perms":["all"]},{"username":"*","perms":["all"]}` + suffix
+			if err := store.Load(strings.NewReader(input)); err == nil {
+				t.Fatal("expected invalid credentials to be rejected")
+			}
+			if store.AA("", "", PermExecute) {
+				t.Error("rejected load enabled anonymous execution")
+			}
+			if store.Check("new", "new-secret") || store.HasPerm("new", PermAll) {
+				t.Error("rejected load installed new credentials or permissions")
+			}
+			if !store.AA("existing", "secret", PermQuery) || store.AA("existing", "secret", PermExecute) {
+				t.Error("rejected load changed existing authorization")
+			}
+		})
+	}
+}
+
+func Test_AuthLoadReplacesCredentials(t *testing.T) {
+	for _, replacement := range []struct {
+		name, input, username, password string
+	}{
+		{"new user", `[{"username":"new","password":"new-secret","perms":["status"]}]`, "new", "new-secret"},
+		{"existing user", `[{"username":"existing","password":"changed","perms":["status"]}]`, "existing", "changed"},
+		{"empty", `[]`, "", ""},
+	} {
+		t.Run(replacement.name, func(t *testing.T) {
+			store := NewCredentialsStore()
+			initial := `[{"username":"existing","password":"secret","perms":["query"]},{"username":"obsolete","password":"old-secret","perms":["all"]},{"username":"*","perms":["execute"]}]`
+			if err := store.Load(strings.NewReader(initial)); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Load(strings.NewReader(replacement.input)); err != nil {
+				t.Fatal(err)
+			}
+			for _, user := range []string{"existing", "obsolete", "new", AllUsers} {
+				password, ok := store.Password(user)
+				if user == replacement.username {
+					if !ok || password != replacement.password || !store.AA(user, replacement.password, PermStatus) {
+						t.Errorf("replacement credentials not active for %q", user)
+					}
+				} else if ok || store.HasPerm(user, PermStatus) {
+					t.Errorf("replacement retained credentials or permissions for %q", user)
+				}
+				if store.HasAnyPerm(user, PermQuery, PermExecute, PermAll) {
+					t.Errorf("replacement retained old permissions for %q", user)
+				}
+			}
+			if store.Check("existing", "secret") || store.AA("", "", PermExecute) {
+				t.Error("replacement retained old password or anonymous access")
+			}
+		})
+	}
+}
+
 func Test_AuthLoadSingle(t *testing.T) {
 	const jsonStream = `
 		[

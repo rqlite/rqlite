@@ -5,10 +5,18 @@
 
 ### Implementation changes and bug fixes
 - [PR #3014](https://github.com/rqlite/rqlite/pull/3014): Preserve table data in SQL dumps when table names contain single quotes or column names contain double quotes.
+- [PR #3031](https://github.com/rqlite/rqlite/pull/3031): Move automatic backup retries from the Store provider to the uploader.
+- [PR #3022](https://github.com/rqlite/rqlite/pull/3022): Replace credentials and permissions only after validating the complete auth configuration, leaving the store unchanged on failure.
+- [PR #3015](https://github.com/rqlite/rqlite/pull/3015): Preserve integer precision when selecting fields from the HTTP status response.
+- [PR #3016](https://github.com/rqlite/rqlite/pull/3016): Preserve non-voting nodes in the Store bootstrap configuration.
+- [PR #3021](https://github.com/rqlite/rqlite/pull/3021): Reject malformed queued-write requests with the wait flag while preserving empty-array and null requests used to wait for the queue to flush.
+- [PR #3019](https://github.com/rqlite/rqlite/pull/3019): Reject trailing JSON values and junk in leader stepdown requests before changing leadership.
+- [PR #3017](https://github.com/rqlite/rqlite/pull/3017): Return the correct elapsed time for HTTP database loads requested with timings.
+- [PR #3013](https://github.com/rqlite/rqlite/pull/3013): Avoid creating Raft state when checking an empty data directory for automatic restore.
 - [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
 - [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Accept extension tarballs whose entries are prefixed with `./`.
 - [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Create implicit parent directories with directory permissions when extracting zip and tar.gz archives, instead of the contained file's mode.
-- [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Stop leaking goroutines from the pre-snapshot sync when a registered participant.
+- [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Stop leaking goroutines from the pre-snapshot sync when a registered participant has stopped listening.
 - [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Remove the temporary output file when gzip compression or decompression of a file fails part-way through.
 - [PR #3006](https://github.com/rqlite/rqlite/pull/3006): Reject duplicate usernames in auth config and require an actual JSON array.
 - [PR #3010](https://github.com/rqlite/rqlite/pull/3010): Apply the configured busy timeout to every pooled reader connection, not just the one borrowed when it was set.

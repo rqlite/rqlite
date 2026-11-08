@@ -18,10 +18,13 @@ func Test_NilRequest(t *testing.T) {
 }
 
 func Test_EmptyRequests_Simple(t *testing.T) {
-	b := []byte(`[]`)
-	_, err := ParseRequest(bytes.NewReader(b))
-	if err != ErrNoStatements {
-		t.Fatalf("empty simple request did not result in correct error")
+	for _, body := range []string{`[]`, `null`, "  null \n\t"} {
+		t.Run(body, func(t *testing.T) {
+			stmts, err := ParseRequest(bytes.NewReader([]byte(body)))
+			if err != ErrNoStatements || len(stmts) != 0 {
+				t.Fatalf("expected no statements, got %v, %v", stmts, err)
+			}
+		})
 	}
 }
 
@@ -493,6 +496,9 @@ func Test_TrailingData(t *testing.T) {
 		name string
 		body string
 	}{
+		{"null with junk", `null garbage`},
+		{"null with array", `null []`},
+		{"null with null", `null null`},
 		{"junk", `["SELECT 1"] garbage`},
 		{"junk no space", `["SELECT 1"]garbage`},
 		{"second array", `["SELECT 1"]["SELECT 2"]`},
