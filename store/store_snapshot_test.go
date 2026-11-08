@@ -975,3 +975,241 @@ func mustCreateRequest(query string) *command.Request {
 		},
 	}
 }
+
+// Test_SingleNodeSnapshot_StagedWALThenLoad tests that a WAL left in the
+// staging directory by a failed incremental snapshot is not packaged on top
+// of a later full snapshot. The staged WAL is relative to the database that
+// existed before the full snapshot. If it is moved into the next incremental
+// snapshot, its frames are applied to the wrong database when the snapshot
+// is restored or reaped, and the result is a corrupt or wrong database.
+//
+// The sequence reproduced here is the one that happens in production when a
+// LOAD is applied after the FSM has staged an incremental snapshot, but before
+// Raft persists it: the LOAD makes a full snapshot due, so the Sink rejects
+// the incremental snapshot, and the staged WAL is kept on purpose.
+func Test_SingleNodeSnapshot_StagedWALThenLoad(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.NoSnapshotOnClose = true
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	mustExecute(t, s, []string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(name) VALUES("fiona")`,
+	})
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot store: %s", err.Error())
+	}
+
+	// Change the schema and add data, so the next incremental snapshot stages
+	// a WAL that rewrites the schema page and adds new pages.
+	stmts := []string{`CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`}
+	for range 100 {
+		stmts = append(stmts, `INSERT INTO bar(name) VALUES("declan")`)
+	}
+	mustExecute(t, s, stmts)
+
+	// The FSM stages an incremental snapshot.
+	fsm := NewFSM(s)
+	f, err := fsm.Snapshot()
+	if err != nil {
+		t.Fatalf("failed to snapshot node: %s", err.Error())
+	}
+
+	// Before the snapshot is persisted, a LOAD is applied.
+	if err := s.Load(context.Background(), loadRequestFromFile(filepath.Join("testdata", "load.sqlite"))); err != nil {
+		t.Fatalf("failed to load: %s", err.Error())
+	}
+
+	// Persisting the incremental snapshot now fails, because a full snapshot
+	// is due. The staged WAL is kept.
+	sink, err := s.snapshotStore.Create(1, 1000, 1000, raft.Configuration{}, 0, nil)
+	if err != nil {
+		t.Fatalf("failed to create snapshot sink: %s", err.Error())
+	}
+	if err := f.Persist(sink); err == nil {
+		t.Fatalf("expected error persisting incremental snapshot after load, got nil")
+	}
+	sink.Cancel()
+	f.Release()
+	wals, err := s.StagedWALs()
+	if err != nil {
+		t.Fatalf("failed to get staged WALs: %s", err.Error())
+	}
+	if exp, got := 1, len(wals); exp != got {
+		t.Fatalf("unexpected number of staged WALs\nexp: %d\ngot: %d", exp, got)
+	}
+
+	// Next snapshot is full, the one after is incremental.
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot store: %s", err.Error())
+	}
+	mustExecute(t, s, []string{`INSERT INTO foo(name) VALUES("fiona")`})
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot store: %s", err.Error())
+	}
+
+	// Restart the node from the Snapshot Store, and check that the database
+	// is intact and contains the loaded data plus the one new row.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.ForceSnapshotRestore(); err != nil {
+		t.Fatalf("failed to force snapshot restore: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	mustCheckStagedWALDB(t, s, `[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]`)
+
+	// Reaping checkpoints the incremental snapshot into the full snapshot,
+	// and checks the integrity of the result.
+	if _, _, err := s.Reap(); err != nil {
+		t.Fatalf("failed to reap snapshots: %s", err.Error())
+	}
+}
+
+// mustCheckStagedWALDB checks that the database of s passes an integrity
+// check, contains only the table foo, and that foo contains exp.
+func mustCheckStagedWALDB(t *testing.T, s *Store, exp string) {
+	t.Helper()
+	for _, c := range []struct {
+		query string
+		exp   string
+	}{
+		{`PRAGMA integrity_check`, `[["ok"]]`},
+		{`SELECT name FROM sqlite_master WHERE type="table"`, `[["foo"]]`},
+		{`SELECT * FROM foo`, exp},
+	} {
+		r, _, _, err := s.Query(context.Background(), queryRequestFromString(c.query, false, false, false))
+		if err != nil {
+			t.Fatalf("failed to query %q: %s", c.query, err.Error())
+		}
+		if r[0].Error != "" {
+			t.Fatalf("query %q returned error: %s", c.query, r[0].Error)
+		}
+		if got := asJSON(r[0].Values); c.exp != got {
+			t.Fatalf("unexpected results for %q\nexp: %s\ngot: %s", c.query, c.exp, got)
+		}
+	}
+}
+
+// Test_SingleNodeSnapshot_StagedWALThenRestore tests that a WAL left in the
+// staging directory by an incremental snapshot that was never persisted is
+// not packaged on top of a snapshot the node then restores from. This is what
+// happens on a follower when the leader sends it a snapshot: Raft installs the
+// snapshot in the Snapshot Store and restores the FSM from it, and the next
+// snapshot the follower takes is incremental. A staged WAL from before the
+// restore is relative to the old database, so it must not be part of that
+// incremental snapshot.
+//
+// Raft's user restore is used to install the snapshot, as it goes through the
+// same Snapshot Store and FSM restore path as a snapshot sent by a leader.
+func Test_SingleNodeSnapshot_StagedWALThenRestore(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.NoSnapshotOnClose = true
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	mustExecute(t, s, []string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(name) VALUES("fiona")`,
+	})
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot store: %s", err.Error())
+	}
+
+	// Change the schema and add data, so the next incremental snapshot stages
+	// a WAL that rewrites the schema page and adds new pages.
+	stmts := []string{`CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`}
+	for range 100 {
+		stmts = append(stmts, `INSERT INTO bar(name) VALUES("declan")`)
+	}
+	mustExecute(t, s, stmts)
+
+	// The FSM stages an incremental snapshot, which is never persisted. The
+	// staged WAL is kept.
+	fsm := NewFSM(s)
+	f, err := fsm.Snapshot()
+	if err != nil {
+		t.Fatalf("failed to snapshot node: %s", err.Error())
+	}
+	f.Release()
+	wals, err := s.StagedWALs()
+	if err != nil {
+		t.Fatalf("failed to get staged WALs: %s", err.Error())
+	}
+	if exp, got := 1, len(wals); exp != got {
+		t.Fatalf("unexpected number of staged WALs\nexp: %d\ngot: %d", exp, got)
+	}
+
+	// Install and restore a snapshot of a different database, as a leader
+	// would send. It contains an empty table foo, in WAL mode.
+	streamer, err := snapshot.NewSnapshotStreamer(mustCopyFileToTempFile(filepath.Join("testdata", "wal-enabled.sqlite")))
+	if err != nil {
+		t.Fatalf("failed to create snapshot streamer: %s", err.Error())
+	}
+	if err := streamer.Open(); err != nil {
+		t.Fatalf("failed to open snapshot streamer: %s", err.Error())
+	}
+	defer streamer.Close()
+	sz, err := streamer.Len()
+	if err != nil {
+		t.Fatalf("failed to get snapshot streamer length: %s", err.Error())
+	}
+	meta := &raft.SnapshotMeta{Version: 1, Size: sz}
+	if err := s.raft.Restore(meta, streamer, 10*time.Second); err != nil {
+		t.Fatalf("failed to restore snapshot: %s", err.Error())
+	}
+
+	// Next snapshot is incremental.
+	mustExecute(t, s, []string{`INSERT INTO foo(name) VALUES("fiona")`})
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot store: %s", err.Error())
+	}
+
+	// Restart the node from the Snapshot Store, and check that the database
+	// is intact and contains the restored data plus the one new row.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.ForceSnapshotRestore(); err != nil {
+		t.Fatalf("failed to force snapshot restore: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	mustCheckStagedWALDB(t, s, `[[1,"fiona"]]`)
+
+	// Reaping checkpoints the incremental snapshot into the full snapshot,
+	// and checks the integrity of the result.
+	if _, _, err := s.Reap(); err != nil {
+		t.Fatalf("failed to reap snapshots: %s", err.Error())
+	}
+}
