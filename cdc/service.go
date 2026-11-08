@@ -569,6 +569,12 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 	stop := make(chan struct{})
 	done := make(chan struct{})
 
+	// An earlier leader loop on this node may have read a batch from the
+	// FIFO and stopped before sending it. Read again from the start of the
+	// FIFO so that batch is sent; batches at or below the high watermark
+	// are skipped below.
+	s.fifo.Rewind()
+
 	go func() {
 		defer close(done)
 

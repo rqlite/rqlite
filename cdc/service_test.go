@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -702,6 +703,97 @@ func Test_ServiceSingleEvent_Dropped(t *testing.T) {
 	testPoll(t, func() bool {
 		return svc.HighWatermark() == 10 && svc.fifo.Len() == 0
 	}, 2*time.Second)
+}
+
+// Test_ServiceSingleEvent_LeaderChangeDuringRetry tests that a batch the
+// leader is still retrying when it loses leadership is not lost: it is the
+// first batch sent once the node is leader again.
+func Test_ServiceSingleEvent_LeaderChangeDuringRetry(t *testing.T) {
+	ResetStats()
+
+	var fail atomic.Bool
+	fail.Store(true)
+	bodyCh := make(chan []byte, 2)
+	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		if fail.Load() {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		b, _ := io.ReadAll(r.Body)
+		bodyCh <- b
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer testSrv.Close()
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.Endpoint = testSrv.URL
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
+	cfg.TransmitMinBackoff = 10 * time.Millisecond
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cl,
+		in,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+	cl.SetLeader(0)
+
+	newEvent := func(idx uint64) *proto.CDCIndexedEventGroup {
+		return &proto.CDCIndexedEventGroup{
+			Index: idx,
+			Events: []*proto.CDCEvent{
+				{
+					Op:       proto.CDCEvent_INSERT,
+					Table:    "foo",
+					NewRowId: int64(idx),
+				},
+			},
+		}
+	}
+
+	// The leader fails to send the first batch, and holds it for a retry.
+	in <- newEvent(1)
+	testPoll(t, func() bool { return svc.NumEndpointRetries() > 0 }, 2*time.Second)
+
+	// Lose leadership and win it back.
+	cl.SetLeader(-1)
+	testPoll(t, func() bool { return !svc.IsLeader() }, 2*time.Second)
+	cl.SetLeader(0)
+	testPoll(t, func() bool { return svc.IsLeader() }, 2*time.Second)
+
+	// Let the endpoint recover and send a second batch. The first batch must
+	// be sent before the second.
+	fail.Store(false)
+	in <- newEvent(2)
+	for _, exp := range []uint64{1, 2} {
+		select {
+		case got := <-bodyCh:
+			msg := &cdcjson.CDCMessagesEnvelope{}
+			if err := cdcjson.UnmarshalFromEnvelopeJSON(got, msg); err != nil {
+				t.Fatalf("invalid JSON received: %v", err)
+			}
+			if len(msg.Payload) != 1 {
+				t.Fatalf("expected 1 message in batch, got %d", len(msg.Payload))
+			}
+			if msg.Payload[0].Index != exp {
+				t.Fatalf("expected batch with index %d, got %d", exp, msg.Payload[0].Index)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timeout waiting for batch with index %d", exp)
+		}
+	}
 }
 
 // Test_ServiceSingleEvent_Undecompressable tests that a batch in the FIFO which

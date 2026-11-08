@@ -325,6 +325,43 @@ func Test_DeleteRange_NeverRead(t *testing.T) {
 	}, time.Second)
 }
 
+// Test_Rewind tests that after a rewind the queue emits again from its first
+// stored item, and that items already deleted are not emitted.
+func Test_Rewind(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	for i := uint64(1); i <= 3; i++ {
+		if err := q.Enqueue(&Event{Index: i, Data: []byte("data")}); err != nil {
+			t.Fatalf("Enqueue failed for index %d: %v", i, err)
+		}
+	}
+
+	expectNext := func(exp uint64) {
+		t.Helper()
+		select {
+		case ev := <-q.C:
+			if ev.Index != exp {
+				t.Fatalf("expected index %d, got %d", exp, ev.Index)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for index %d", exp)
+		}
+	}
+
+	expectNext(1)
+	expectNext(2)
+	q.Rewind()
+	expectNext(1)
+
+	if err := q.DeleteRange(1); err != nil {
+		t.Fatalf("DeleteRange failed: %v", err)
+	}
+	q.Rewind()
+	expectNext(2)
+	expectNext(3)
+}
+
 // Test_Queue_FirstKeyHighestKey tests that key fetches return the correct values after various operations.
 func Test_Queue_FirstKeyHighestKey(t *testing.T) {
 	q, path, _ := newTestQueue(t)
