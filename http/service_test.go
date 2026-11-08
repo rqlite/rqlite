@@ -21,6 +21,7 @@ import (
 	cluster "github.com/rqlite/rqlite/v10/cluster/proto"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/proxy"
+	"github.com/rqlite/rqlite/v10/queue"
 	"github.com/rqlite/rqlite/v10/store"
 )
 
@@ -798,6 +799,33 @@ func Test_Boot(t *testing.T) {
 	}
 }
 
+func Test_getSubJSON_PreservesNumbers(t *testing.T) {
+	input := []byte(`{"store":{"index":9007199254740993,"max":18446744073709551615}}`)
+	for _, tc := range []struct{ key, want string }{
+		{"store.index", "9007199254740993"},
+		{"store.max", "18446744073709551615"},
+		{"store", `{"index":9007199254740993,"max":18446744073709551615}`},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			got, err := getSubJSON(input, tc.key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tc.want {
+				t.Fatalf("got %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func Test_getSubJSON_RejectsTrailingData(t *testing.T) {
+	for _, input := range []string{`{"store":1} {}`, `{"store":1} junk`} {
+		if _, err := getSubJSON([]byte(input), "store"); err == nil {
+			t.Fatalf("expected error for %q", input)
+		}
+	}
+}
+
 func Test_RegisterStatus(t *testing.T) {
 	var stats *mockStatusReporter
 	m := &MockStore{}
@@ -1104,6 +1132,50 @@ func Test_ReadyzNoLeader(t *testing.T) {
 	}
 	if exp, got := "[+]node ok\n[+]leader does not exist", mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
+}
+
+func Test_QueuedExecuteWaitValidatesBody(t *testing.T) {
+	for _, tc := range []struct {
+		body   string
+		status int
+	}{
+		{`["INSERT INTO foo VALUES(1)"] junk`, http.StatusBadRequest},
+		{`["INSERT INTO foo VALUES(1)"] []`, http.StatusBadRequest},
+		{`{}`, http.StatusBadRequest},
+		{`[42]`, http.StatusBadRequest},
+		{`[]`, http.StatusOK},
+		{`null`, http.StatusOK},
+		{"  null \n\t", http.StatusOK},
+		{`null junk`, http.StatusBadRequest},
+		{`null []`, http.StatusBadRequest},
+	} {
+		t.Run(tc.body, func(t *testing.T) {
+			s := New("", nil, nil, nil, nil)
+			s.stmtQueue = queue.New[*command.Statement](1, 1, 0)
+			defer s.stmtQueue.Close()
+			done := make(chan struct{})
+			defer close(done)
+			go func() {
+				select {
+				case req := <-s.stmtQueue.C:
+					req.Close()
+				case <-done:
+				}
+			}()
+			rr := httptest.NewRecorder()
+			s.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/db/execute?queue&wait&noleader&timeout=1s", strings.NewReader(tc.body)))
+			if rr.Code != tc.status {
+				t.Fatalf("status=%d, want %d; body: %s", rr.Code, tc.status, rr.Body)
+			}
+
+			// Empty requests are only accepted as a wait-only queue flush.
+			rr = httptest.NewRecorder()
+			s.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/db/execute?queue&noleader", strings.NewReader(tc.body)))
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("without wait: status=%d, want 400; body: %s", rr.Code, rr.Body)
+			}
+		})
 	}
 }
 
@@ -1822,6 +1894,40 @@ func Test_Leader_POST_WithID(t *testing.T) {
 
 	if got, exp := gotID, "foo"; got != exp {
 		t.Fatalf("wrong node ID received by handler, got %s, exp %s", got, exp)
+	}
+}
+
+func Test_LeaderPOSTRejectsTrailingJSON(t *testing.T) {
+	for _, body := range []string{`{"id":"node1"} {"id":"node2"}`, `{"id":"node1"} junk`, `{} null`} {
+		t.Run(body, func(t *testing.T) {
+			called := false
+			m := &MockStore{stepdownFn: func(bool, string) error { called = true; return nil }}
+			c := &mockClusterService{}
+			s := New("", m, c, proxy.New(m, c), nil)
+			rr := httptest.NewRecorder()
+			s.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/leader", strings.NewReader(body)))
+			if rr.Code != http.StatusBadRequest || called {
+				t.Fatalf("status=%d, stepdown called=%v; want 400 without stepdown", rr.Code, called)
+			}
+		})
+	}
+}
+
+func Test_LeaderPOSTAllowsTrailingWhitespace(t *testing.T) {
+	called := false
+	m := &MockStore{stepdownFn: func(_ bool, id string) error {
+		called = true
+		if id != "node1" {
+			t.Fatalf("unexpected target %q", id)
+		}
+		return nil
+	}}
+	c := &mockClusterService{}
+	s := New("", m, c, proxy.New(m, c), nil)
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/leader", strings.NewReader("{\"id\":\"node1\"}\n\t ")))
+	if rr.Code != http.StatusOK || !called {
+		t.Fatalf("status=%d, stepdown called=%v; want 200 with stepdown", rr.Code, called)
 	}
 }
 
