@@ -71,11 +71,28 @@ You can download a pre-built release for Windows in one of two ways:
 """
 
 notes_template = """## What's changed
-{section}
+{changes}
 
 See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for the full history of changes, and check out the _Assets_ section below for prebuilt binaries."""
 
 notes_fallback = """See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on {release}, and check out the _Assets_ section below for prebuilt binaries."""
+
+# Subsections collapsed on the release page. Anything else, such as new
+# features or upgrade notes, is shown inline.
+COLLAPSED_SUBSECTIONS = ('Implementation changes and bug fixes',)
+
+def markdown_lines(text):
+    """Yield (line, is_heading_level) for each line of text.
+
+    is_heading_level is the number of leading '#' characters for a heading
+    outside a fenced code block, or 0 otherwise.
+    """
+    in_fence = False
+    for line in text.splitlines():
+        if line.lstrip().startswith(('```', '~~~')):
+            in_fence = not in_fence
+        m = None if in_fence else re.match(r'^(#+)\s+\S', line)
+        yield line, len(m.group(1)) if m else 0
 
 def changelog_section(text, tag):
     """Return the body of the CHANGELOG section for tag, or None if absent.
@@ -84,16 +101,12 @@ def changelog_section(text, tag):
     e.g. '## v10.6.6 (October 28th 2026)', and ends at the next level-2
     heading. Lines inside fenced code blocks are never treated as headings.
     """
-    heading = re.compile(r'^##\s+(\S+)')
-    body, in_section, in_fence = [], False, False
-    for line in text.splitlines():
-        if line.lstrip().startswith(('```', '~~~')):
-            in_fence = not in_fence
-        m = None if in_fence else heading.match(line)
-        if m:
+    body, in_section = [], False
+    for line, level in markdown_lines(text):
+        if level == 2:
             if in_section:
                 break
-            in_section = m.group(1) == tag
+            in_section = line.split()[1] == tag
             continue
         if in_section:
             body.append(line)
@@ -101,6 +114,50 @@ def changelog_section(text, tag):
         return None
     section = '\n'.join(body).strip()
     return section or None
+
+def split_subsections(section):
+    """Split a release section into its preamble and level-3 subsections.
+
+    Returns (preamble, [(title, body), ...]) where preamble is any text
+    before the first level-3 heading, and each body excludes its heading.
+    """
+    preamble, subsections = [], []
+    for line, level in markdown_lines(section):
+        if level == 3:
+            subsections.append((line.lstrip('#').strip(), []))
+        elif subsections:
+            subsections[-1][1].append(line)
+        else:
+            preamble.append(line)
+    return '\n'.join(preamble).strip(), [(t, '\n'.join(b).strip()) for t, b in subsections]
+
+def count_bullets(text):
+    return sum(1 for line in text.splitlines() if re.match(r'^\s*[-*+]\s', line))
+
+def render_changes(section):
+    """Render a release section for the release page.
+
+    The preamble and most subsections are shown as-is. The subsections named
+    in COLLAPSED_SUBSECTIONS, the long list of fixes, are placed in a
+    collapsed block so the release page stays short.
+    """
+    preamble, subsections = split_subsections(section)
+    inline = [preamble] if preamble else []
+    collapsed = []
+    for title, body in subsections:
+        if title in COLLAPSED_SUBSECTIONS:
+            collapsed.append((title, body))
+        else:
+            inline.append(f'### {title}\n{body}')
+
+    if collapsed:
+        title = collapsed[0][0]
+        body = '\n'.join(b for _, b in collapsed)
+        n = count_bullets(body)
+        summary = f'{n} {title[0].lower() + title[1:]}' if n else title
+        inline.append(f'<details>\n<summary>{summary}</summary>\n\n{body}\n</details>')
+
+    return '\n\n'.join(inline)
 
 def release_notes(tag, changelog_path=CHANGELOG_PATH):
     """Render the release body for tag.
@@ -118,7 +175,7 @@ def release_notes(tag, changelog_path=CHANGELOG_PATH):
         print(f'warning: no CHANGELOG section found for {tag}', file=sys.stderr)
         notes = notes_fallback.format(release=tag)
     else:
-        notes = notes_template.format(section=section)
+        notes = notes_template.format(changes=render_changes(section))
     return release_template.format(release=tag, version=tag.lstrip('v'), notes=notes)
 
 def set_release_notes(token, release_id, notes):
