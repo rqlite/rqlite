@@ -312,7 +312,7 @@ func (c *Client) Backup(ctx context.Context, br *command.BackupRequest, nodeAddr
 		return 0, err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readCommandResponse(conn, command, timeout)
 	if err != nil {
 		handleConnError(conn)
 		return 0, err
@@ -401,7 +401,7 @@ func (c *Client) RemoveNode(ctx context.Context, rn *command.RemoveNodeRequest, 
 		return err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readCommandResponse(conn, command, timeout)
 	if err != nil {
 		handleConnError(conn)
 		return err
@@ -445,7 +445,7 @@ func (c *Client) DemoteNode(ctx context.Context, dn *command.DemoteNodeRequest, 
 		return err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readCommandResponse(conn, command, timeout)
 	if err != nil {
 		handleConnError(conn)
 		return err
@@ -489,7 +489,7 @@ func (c *Client) PromoteNode(ctx context.Context, pn *command.PromoteNodeRequest
 		return err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readCommandResponse(conn, command, timeout)
 	if err != nil {
 		handleConnError(conn)
 		return err
@@ -533,7 +533,7 @@ func (c *Client) Stepdown(ctx context.Context, sr *command.StepdownRequest, node
 		return err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readCommandResponse(conn, command, timeout)
 	if err != nil {
 		handleConnError(conn)
 		return err
@@ -577,7 +577,7 @@ func (c *Client) Notify(ctx context.Context, nr *command.NotifyRequest, nodeAddr
 		return err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readCommandResponse(conn, command, timeout)
 	if err != nil {
 		handleConnError(conn)
 		return err
@@ -626,7 +626,7 @@ func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr str
 			return err
 		}
 
-		p, err := readResponse(conn, timeout)
+		p, err := readCommandResponse(conn, command, timeout)
 		if err != nil {
 			handleConnError(conn)
 			return err
@@ -718,7 +718,7 @@ func (c *Client) BroadcastHWM(ctx context.Context, hwm uint64, creds *proto.Cred
 				}
 
 				// Read response
-				p, err := readResponse(conn, timeout)
+				p, err := readCommandResponse(conn, command, timeout)
 				if err != nil {
 					handleConnError(conn)
 					conn.Close()
@@ -915,7 +915,60 @@ func writeCommandReadResponse(conn net.Conn, c *proto.Command, timeout time.Dura
 	if err := writeCommand(conn, c, timeout); err != nil {
 		return nil, err
 	}
-	return readResponse(conn, timeout)
+	return readCommandResponse(conn, c, timeout)
+}
+
+// readCommandResponse discards connections the service explicitly closes after
+// rejecting a command, before callers can return them to the pool.
+func readCommandResponse(conn net.Conn, c *proto.Command, timeout time.Duration) ([]byte, error) {
+	p, err := readResponse(conn, timeout)
+	if err != nil {
+		return nil, err
+	}
+	var response interface {
+		pb.Message
+		GetError() string
+	}
+	switch c.Type {
+	case proto.Command_COMMAND_TYPE_EXECUTE:
+		response = &proto.CommandExecuteResponse{}
+	case proto.Command_COMMAND_TYPE_QUERY:
+		response = &proto.CommandQueryResponse{}
+	case proto.Command_COMMAND_TYPE_REQUEST:
+		response = &proto.CommandRequestResponse{}
+	case proto.Command_COMMAND_TYPE_BACKUP_STREAM:
+		response = &proto.CommandBackupResponse{}
+	case proto.Command_COMMAND_TYPE_LOAD:
+		response = &proto.CommandLoadResponse{}
+	case proto.Command_COMMAND_TYPE_LOAD_CHUNK:
+		response = &proto.CommandLoadChunkResponse{}
+	case proto.Command_COMMAND_TYPE_REMOVE_NODE:
+		response = &proto.CommandRemoveNodeResponse{}
+	case proto.Command_COMMAND_TYPE_DEMOTE_NODE:
+		response = &proto.CommandDemoteNodeResponse{}
+	case proto.Command_COMMAND_TYPE_PROMOTE_NODE:
+		response = &proto.CommandPromoteNodeResponse{}
+	case proto.Command_COMMAND_TYPE_STEPDOWN:
+		response = &proto.CommandStepdownResponse{}
+	case proto.Command_COMMAND_TYPE_NOTIFY:
+		response = &proto.CommandNotifyResponse{}
+	case proto.Command_COMMAND_TYPE_JOIN:
+		response = &proto.CommandJoinResponse{}
+	case proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE:
+		response = &proto.HighwaterMarkUpdateResponse{}
+	}
+	if response != nil {
+		if err := pb.Unmarshal(p, response); err != nil {
+			handleConnError(conn)
+			return nil, err
+		}
+		e := response.GetError()
+		if e == unauthorizedError || e == unsupportedError ||
+			(c.Type == proto.Command_COMMAND_TYPE_BACKUP_STREAM && e == "BackupRequest is nil") {
+			handleConnError(conn)
+		}
+	}
+	return p, nil
 }
 
 func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error {
