@@ -12,6 +12,10 @@ from s3 import download_s3_object, delete_s3_object, upload_s3_object
 S3_BUCKET = 'rqlite-testing-circleci'
 S3_BUCKET_REGION = 'us-west-2'
 
+# Test-only age identity/recipient pair. Never use these keys for real backups.
+AGE_SECRET_KEY = 'AGE-SECRET-KEY-1ZDVXSAMDN6YAWXQV9NW8STWLQ4DUWEZKYR4UUVLCFUCFVZPU0Y9Q66S4VS'
+AGE_RECIPIENT = 'age1hh2ugfw3uz70na0t02909zrf6y4r4lz6drf9dsm9rmq3xksvegkseqdtph'
+
 RQLITED_PATH = os.environ['RQLITED_PATH']
 
 class TestAutoBackupRestore_S3(unittest.TestCase):
@@ -142,6 +146,81 @@ class TestAutoBackupRestore_Minio(unittest.TestCase):
     deprovision_node(nodeR)
     os.remove(auto_backup_cfg_file)
     os.remove(auto_restore_cfg_file)
+
+  @unittest.skipUnless(env_present('MINIO_ENDPOINT'), "Minio not available")
+  def test_encrypted(self):
+    '''Test encrypted automatic backup and restore with Minio, compressed and uncompressed'''
+    endpoint = os.environ['MINIO_ENDPOINT']
+    access_key_id = os.environ['MINIO_ROOT_USER']
+    secret_access_key_id = os.environ['MINIO_ROOT_PASSWORD']
+    bucket = os.environ['MINIO_BUCKET']
+
+    for no_compress in (True, False):
+      with self.subTest(no_compress=no_compress):
+        node = None
+        node_restore = None
+        path = random_string(32)
+        backup_cfg_file = None
+        restore_cfg_file = None
+        try:
+          auto_backup_cfg = {
+            "version": 1,
+            "type": "s3",
+            "interval": "1s",
+            "no_compress": no_compress,
+            "encryption_key": AGE_RECIPIENT,
+            "sub" : {
+              "endpoint": endpoint,
+              "access_key_id": access_key_id,
+              "secret_access_key": secret_access_key_id,
+              "region": "region1",
+              "bucket": bucket,
+              "path": path,
+              "force_path_style": True
+            }
+          }
+          backup_cfg_file = write_random_file(json.dumps(auto_backup_cfg))
+
+          node = Node(RQLITED_PATH, '0', auto_backup=backup_cfg_file)
+          node.start()
+          node.wait_for_leader()
+          node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+          node.execute('INSERT INTO foo(name) VALUES("fiona")')
+          node.wait_for_upload(1)
+          node.wait_until_uploads_idle()
+
+          self.assertTrue(node.status()['auto_backups']['encrypted'])
+
+          auto_restore_cfg = {
+            "version": 1,
+            "type": "s3",
+            "decryption_keys": AGE_SECRET_KEY,
+            "sub" : {
+              "endpoint": endpoint,
+              "access_key_id": access_key_id,
+              "secret_access_key": secret_access_key_id,
+              "region": "region1",
+              "bucket": bucket,
+              "path": path,
+              "force_path_style": True
+            }
+          }
+          restore_cfg_file = write_random_file(json.dumps(auto_restore_cfg))
+
+          node_restore = Node(RQLITED_PATH, '0', auto_restore=restore_cfg_file)
+          node_restore.start()
+          node_restore.wait_for_ready()
+          j = node_restore.query('SELECT * FROM foo')
+          self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+        finally:
+          if node:
+            deprovision_node(node)
+          if node_restore:
+            deprovision_node(node_restore)
+          if backup_cfg_file:
+            os.remove(backup_cfg_file)
+          if restore_cfg_file:
+            os.remove(restore_cfg_file)
 
 class TestAutoRestore_S3(unittest.TestCase):
   def create_sqlite_file(self):
