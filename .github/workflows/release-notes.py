@@ -11,6 +11,8 @@ CHANGELOG_PATH = Path(__file__).resolve().parents[2] / 'CHANGELOG.md'
 release_template = """
 _rqlite_ is a lightweight, user-friendly, distributed relational database, which uses [SQLite](https://www.sqlite.org/) as its storage engine. rqlite provides easy-to-use, fault-tolerant and highly-available storage for your most important data. You can learn a lot more about rqlite at [rqlite.io](https://www.rqlite.io).
 
+Check out the _Assets_ section below for prebuilt binaries.
+
 {notes}
 
 ## Getting started
@@ -72,14 +74,17 @@ You can download a pre-built release for Windows in one of two ways:
 
 notes_template = """## What's changed
 {changes}
+"""
 
-See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for the full history of changes, and check out the _Assets_ section below for prebuilt binaries."""
-
-notes_fallback = """See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on {release}, and check out the _Assets_ section below for prebuilt binaries."""
+notes_fallback = """See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on {release}."""
 
 # Subsections collapsed on the release page. Anything else, such as new
 # features or upgrade notes, is shown inline.
 COLLAPSED_SUBSECTIONS = ('Implementation changes and bug fixes',)
+
+# Subsection whose absence is called out explicitly on the release page.
+FEATURES_SUBSECTION = 'New features'
+NO_FEATURES_TEXT = 'This release contains no new features.'
 
 def markdown_lines(text):
     """Yield (line, is_heading_level) for each line of text.
@@ -139,7 +144,9 @@ def render_changes(section):
 
     The preamble and most subsections are shown as-is. The subsections named
     in COLLAPSED_SUBSECTIONS, the long list of fixes, are placed in a
-    collapsed block so the release page stays short.
+    collapsed block so the release page stays short. A release without a
+    new-features subsection says so, rather than leaving the reader to infer
+    it from the absence of a heading.
     """
     preamble, subsections = split_subsections(section)
     inline = [preamble] if preamble else []
@@ -149,6 +156,9 @@ def render_changes(section):
             collapsed.append((title, body))
         else:
             inline.append(f'### {title}\n{body}')
+
+    if not any(title == FEATURES_SUBSECTION for title, _ in subsections):
+        inline.append(NO_FEATURES_TEXT)
 
     if collapsed:
         title = collapsed[0][0]
