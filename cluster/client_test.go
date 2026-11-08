@@ -502,12 +502,11 @@ func Test_ClientJoinNode_MaxRedirectsExceeded(t *testing.T) {
 
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {
-		redirects <- struct{}{}
-
 		c := readCommand(conn)
 		if c == nil {
 			return
 		}
+		redirects <- struct{}{}
 		if c.Type != proto.Command_COMMAND_TYPE_JOIN {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
@@ -600,12 +599,11 @@ func Test_ClientJoinNode_SuccessAfterRedirect(t *testing.T) {
 
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {
-		attempts <- struct{}{}
-
 		c := readCommand(conn)
 		if c == nil {
 			return
 		}
+		attempts <- struct{}{}
 		if c.Type != proto.Command_COMMAND_TYPE_JOIN {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
