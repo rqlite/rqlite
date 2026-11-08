@@ -149,16 +149,11 @@ func (c *Client) GetNodeMeta(ctx context.Context, nodeAddr string, retries int, 
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_GET_NODE_META,
 	}
-	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
+	a := &proto.NodeMeta{}
+	nr, err := c.retry(ctx, command, nodeAddr, timeout, retries, a)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
 	if err != nil {
 		return nil, err
-	}
-
-	a := &proto.NodeMeta{}
-	err = pb.Unmarshal(p, a)
-	if err != nil {
-		return nil, fmt.Errorf("protobuf unmarshal: %w", err)
 	}
 	if a.Version == "" {
 		// Handle nodes running older code.
@@ -175,16 +170,11 @@ func (c *Client) GetCommitIndex(ctx context.Context, nodeAddr string, retries in
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_GET_NODE_META,
 	}
-	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
+	a := &proto.NodeMeta{}
+	nr, err := c.retry(ctx, command, nodeAddr, timeout, retries, a)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
 	if err != nil {
 		return 0, err
-	}
-
-	a := &proto.NodeMeta{}
-	err = pb.Unmarshal(p, a)
-	if err != nil {
-		return 0, fmt.Errorf("protobuf unmarshal: %w", err)
 	}
 	return a.CommitIndex, nil
 }
@@ -203,14 +193,9 @@ func (c *Client) Execute(ctx context.Context, er *command.ExecuteRequest, nodeAd
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
-	stats.Add(numClientExecuteRetries, int64(nr))
-	if err != nil {
-		return nil, 0, err
-	}
-
 	a := &proto.CommandExecuteResponse{}
-	err = pb.Unmarshal(p, a)
+	nr, err := c.retry(ctx, command, nodeAddr, timeout, retries, a)
+	stats.Add(numClientExecuteRetries, int64(nr))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -235,14 +220,9 @@ func (c *Client) Query(ctx context.Context, qr *command.QueryRequest, nodeAddr s
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
-	stats.Add(numClientQueryRetries, int64(nr))
-	if err != nil {
-		return nil, 0, err
-	}
-
 	a := &proto.CommandQueryResponse{}
-	err = pb.Unmarshal(p, a)
+	nr, err := c.retry(ctx, command, nodeAddr, timeout, retries, a)
+	stats.Add(numClientQueryRetries, int64(nr))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -267,14 +247,9 @@ func (c *Client) Request(ctx context.Context, r *command.ExecuteQueryRequest, no
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
-	stats.Add(numClientRequestRetries, int64(nr))
-	if err != nil {
-		return nil, 0, 0, err
-	}
-
 	a := &proto.CommandRequestResponse{}
-	err = pb.Unmarshal(p, a)
+	nr, err := c.retry(ctx, command, nodeAddr, timeout, retries, a)
+	stats.Add(numClientRequestRetries, int64(nr))
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -329,11 +304,14 @@ func (c *Client) Backup(ctx context.Context, br *command.BackupRequest, nodeAddr
 
 	// The backup stream is unconditionally compressed, so depending on whether
 	// the user requested compression, we may need to decompress the response.
+	// A stream that ends early leaves the connection mid-message, so it must
+	// not go back to the pool.
 	var rc io.ReadCloser
 	rc = conn
 	if !br.Compress {
 		gzr, err := gzip.NewReader(conn)
 		if err != nil {
+			handleConnError(conn)
 			return 0, err
 		}
 		gzr.Multistream(false)
@@ -341,6 +319,9 @@ func (c *Client) Backup(ctx context.Context, br *command.BackupRequest, nodeAddr
 		defer rc.Close()
 	}
 	n, err := io.Copy(w, rc)
+	if err != nil {
+		handleConnError(conn)
+	}
 	return int(n), err
 }
 
@@ -357,14 +338,9 @@ func (c *Client) Load(ctx context.Context, lr *command.LoadRequest, nodeAddr str
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
-	stats.Add(numClientLoadRetries, int64(nr))
-	if err != nil {
-		return err
-	}
-
 	a := &proto.CommandLoadResponse{}
-	err = pb.Unmarshal(p, a)
+	nr, err := c.retry(ctx, command, nodeAddr, timeout, retries, a)
+	stats.Add(numClientLoadRetries, int64(nr))
 	if err != nil {
 		return err
 	}
@@ -382,13 +358,6 @@ func (c *Client) RemoveNode(ctx context.Context, rn *command.RemoveNodeRequest, 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	conn, err := c.dial(nodeAddr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	// Create the request.
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_REMOVE_NODE,
 		Request: &proto.Command_RemoveNodeRequest{
@@ -396,20 +365,8 @@ func (c *Client) RemoveNode(ctx context.Context, rn *command.RemoveNodeRequest, 
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return err
-	}
-
-	p, err := readResponse(conn, timeout)
-	if err != nil {
-		handleConnError(conn)
-		return err
-	}
-
 	a := &proto.CommandRemoveNodeResponse{}
-	err = pb.Unmarshal(p, a)
-	if err != nil {
+	if err := c.roundTrip(nodeAddr, command, timeout, a); err != nil {
 		return err
 	}
 
@@ -426,13 +383,6 @@ func (c *Client) DemoteNode(ctx context.Context, dn *command.DemoteNodeRequest, 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	conn, err := c.dial(nodeAddr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	// Create the request.
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_DEMOTE_NODE,
 		Request: &proto.Command_DemoteNodeRequest{
@@ -440,20 +390,8 @@ func (c *Client) DemoteNode(ctx context.Context, dn *command.DemoteNodeRequest, 
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return err
-	}
-
-	p, err := readResponse(conn, timeout)
-	if err != nil {
-		handleConnError(conn)
-		return err
-	}
-
 	a := &proto.CommandDemoteNodeResponse{}
-	err = pb.Unmarshal(p, a)
-	if err != nil {
+	if err := c.roundTrip(nodeAddr, command, timeout, a); err != nil {
 		return err
 	}
 
@@ -470,13 +408,6 @@ func (c *Client) PromoteNode(ctx context.Context, pn *command.PromoteNodeRequest
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	conn, err := c.dial(nodeAddr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	// Create the request.
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_PROMOTE_NODE,
 		Request: &proto.Command_PromoteNodeRequest{
@@ -484,20 +415,8 @@ func (c *Client) PromoteNode(ctx context.Context, pn *command.PromoteNodeRequest
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return err
-	}
-
-	p, err := readResponse(conn, timeout)
-	if err != nil {
-		handleConnError(conn)
-		return err
-	}
-
 	a := &proto.CommandPromoteNodeResponse{}
-	err = pb.Unmarshal(p, a)
-	if err != nil {
+	if err := c.roundTrip(nodeAddr, command, timeout, a); err != nil {
 		return err
 	}
 
@@ -514,13 +433,6 @@ func (c *Client) Stepdown(ctx context.Context, sr *command.StepdownRequest, node
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	conn, err := c.dial(nodeAddr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	// Create the request.
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_STEPDOWN,
 		Request: &proto.Command_StepdownRequest{
@@ -528,20 +440,8 @@ func (c *Client) Stepdown(ctx context.Context, sr *command.StepdownRequest, node
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return err
-	}
-
-	p, err := readResponse(conn, timeout)
-	if err != nil {
-		handleConnError(conn)
-		return err
-	}
-
 	a := &proto.CommandStepdownResponse{}
-	err = pb.Unmarshal(p, a)
-	if err != nil {
+	if err := c.roundTrip(nodeAddr, command, timeout, a); err != nil {
 		return err
 	}
 
@@ -558,13 +458,6 @@ func (c *Client) Notify(ctx context.Context, nr *command.NotifyRequest, nodeAddr
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	conn, err := c.dial(nodeAddr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	// Create the request.
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_NOTIFY,
 		Request: &proto.Command_NotifyRequest{
@@ -572,20 +465,8 @@ func (c *Client) Notify(ctx context.Context, nr *command.NotifyRequest, nodeAddr
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return err
-	}
-
-	p, err := readResponse(conn, timeout)
-	if err != nil {
-		handleConnError(conn)
-		return err
-	}
-
 	a := &proto.CommandNotifyResponse{}
-	err = pb.Unmarshal(p, a)
-	if err != nil {
+	if err := c.roundTrip(nodeAddr, command, timeout, a); err != nil {
 		return err
 	}
 
@@ -606,13 +487,6 @@ func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr str
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		conn, err := c.dial(nodeAddr)
-		if err != nil {
-			return err
-		}
-		defer conn.Close()
-
-		// Create the request.
 		command := &proto.Command{
 			Type: proto.Command_COMMAND_TYPE_JOIN,
 			Request: &proto.Command_JoinRequest{
@@ -620,21 +494,8 @@ func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr str
 			},
 			Credentials: creds,
 		}
-
-		if err := writeCommand(conn, command, timeout); err != nil {
-			handleConnError(conn)
-			return err
-		}
-
-		p, err := readResponse(conn, timeout)
-		if err != nil {
-			handleConnError(conn)
-			return err
-		}
-
 		a := &proto.CommandJoinResponse{}
-		err = pb.Unmarshal(p, a)
-		if err != nil {
+		if err := c.roundTrip(nodeAddr, command, timeout, a); err != nil {
 			return err
 		}
 
@@ -703,33 +564,8 @@ func (c *Client) BroadcastHWM(ctx context.Context, hwm uint64, creds *proto.Cred
 			// Attempt with retries
 			var lastErr error
 			for attempt := 0; attempt <= retries; attempt++ {
-				conn, err := c.dial(nodeAddress)
-				if err != nil {
-					lastErr = err
-					continue
-				}
-
-				// Write command
-				if err := writeCommand(conn, command, timeout); err != nil {
-					handleConnError(conn)
-					conn.Close()
-					lastErr = err
-					continue
-				}
-
-				// Read response
-				p, err := readResponse(conn, timeout)
-				if err != nil {
-					handleConnError(conn)
-					conn.Close()
-					lastErr = err
-					continue
-				}
-				conn.Close()
-
-				// Parse response
 				resp := &proto.HighwaterMarkUpdateResponse{}
-				if err := pb.Unmarshal(p, resp); err != nil {
+				if err := c.roundTrip(nodeAddress, command, timeout, resp); err != nil {
 					lastErr = err
 					continue
 				}
@@ -854,36 +690,45 @@ func (c *Client) dialWithOption(nodeAddr string, forceNew bool) (net.Conn, error
 	return pl.Get()
 }
 
-// retry retries a command on a remote node. It does this so we churn through connections
-// in the pool if we hit an error, as the remote node may have restarted and the pool's
-// connections are now stale.
-func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr string, timeout time.Duration, maxRetries int) ([]byte, int, error) {
-	var p []byte
-	var errOuter error
+// roundTrip sends command to the node at nodeAddr over a pooled connection and
+// unmarshals the reply into resp. A connection that fails during the exchange
+// is marked unusable so the pool discards it instead of reusing it.
+func (c *Client) roundTrip(nodeAddr string, command *proto.Command, timeout time.Duration, resp pb.Message) error {
+	conn, err := c.dial(nodeAddr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return roundTripConn(conn, command, timeout, resp)
+}
+
+// roundTripConn performs the exchange in roundTrip on an existing connection.
+func roundTripConn(conn net.Conn, command *proto.Command, timeout time.Duration, resp pb.Message) error {
+	p, err := writeCommandReadResponse(conn, command, timeout)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+	if err := pb.Unmarshal(p, resp); err != nil {
+		return fmt.Errorf("protobuf unmarshal: %w", err)
+	}
+	return nil
+}
+
+// retry retries a command on a remote node, unmarshaling the reply into resp.
+// It does this so we churn through connections in the pool if we hit an error,
+// as the remote node may have restarted and the pool's connections are now stale.
+// It returns the number of retries performed.
+func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr string, timeout time.Duration, maxRetries int, resp pb.Message) (int, error) {
 	effectiveRetries := max(1, maxRetries)
 	nRetries := 0
 
 	for {
 		if err := ctx.Err(); err != nil {
-			return nil, nRetries, err
+			return nRetries, err
 		}
-		p, errOuter = func() ([]byte, error) {
-			conn, errInner := c.dial(nodeAddr)
-			if errInner != nil {
-				return nil, errInner
-			}
-			defer conn.Close()
-
-			b, errInner := writeCommandReadResponse(conn, command, timeout)
-			if errInner != nil {
-				handleConnError(conn)
-				return nil, errInner
-			}
-
-			return b, nil
-		}()
-		if errOuter == nil {
-			break
+		if err := c.roundTrip(nodeAddr, command, timeout, resp); err == nil {
+			return nRetries, nil
 		}
 		nRetries++
 		stats.Add(numClientRetries, 1)
@@ -895,20 +740,14 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 		if nRetries == effectiveRetries {
 			conn, err := c.dialWithOption(nodeAddr, true)
 			if err != nil {
-				return nil, nRetries, err
+				return nRetries, err
 			}
 			defer conn.Close()
 			c.numForcedNewConns.Add(1)
 			stats.Add(numClientForceNewConn, 1)
-
-			if p, err = writeCommandReadResponse(conn, command, timeout); err != nil {
-				handleConnError(conn)
-				return nil, nRetries, err
-			}
-			break
+			return nRetries, roundTripConn(conn, command, timeout, resp)
 		}
 	}
-	return p, nRetries, nil
 }
 
 func writeCommandReadResponse(conn net.Conn, c *proto.Command, timeout time.Duration) (buf []byte, retErr error) {
