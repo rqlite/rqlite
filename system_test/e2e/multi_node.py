@@ -561,11 +561,13 @@ class TestEndToEndConnectionPools(unittest.TestCase):
     self.assertEqual(n.node_id, l0.node_id)
 
     # Now, the followers have connection pools, but the connections within are stale.
-    # Ensure the followers detect this and use a fresh connection to the leader.
+    # Ensure pool checkout detects stale sockets before sending, so the
+    # default zero-retry query succeeds without resending the command.
     for f in self.cluster.followers():
       j = f.query('SELECT 1', level="strong")
       self.assertEqual(j, d_("{'results': [{'values': [[1]], 'types': ['integer'], 'columns': ['1']}]}"))
-      self.assertEqual(f.expvar()['cluster']['num_client_force_new_conn'], 1)
+      self.assertEqual(f.expvar()['cluster']['num_client_force_new_conn'], 0)
+      self.assertEqual(f.expvar()['cluster']['num_client_query_retries'], 0)
 
 class TestEndToEndNonVoter(unittest.TestCase):
   def setUp(self):
