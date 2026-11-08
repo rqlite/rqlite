@@ -2702,6 +2702,11 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			s.numFullSnapshotsMetaFail.Add(1)
 			return nil, fmt.Errorf("checkpoint did not succeed during full snapshot")
 		}
+		// A full snapshot supersedes any WAL left staged by an earlier failed
+		// incremental snapshot; that WAL must never be packaged on top of it.
+		if err := fsutil.RemoveAll(s.walStagingDir); err != nil {
+			return nil, err
+		}
 		streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
 		if err != nil {
 			return nil, err
@@ -2887,6 +2892,12 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		return fmt.Errorf("error swapping database file: %v", err)
 	}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
+
+	// Any WAL left staged by an earlier failed incremental snapshot was made from
+	// the database just replaced; it must never be packaged on top of this one.
+	if err := fsutil.RemoveAll(s.walStagingDir); err != nil {
+		return fmt.Errorf("failed to remove WAL staging directory post restore: %s", err)
+	}
 
 	// Installed SQLite database is safe for fast restarts again. It is fingerprinted
 	// against the very index and term the node is adopting here, so that a restart
