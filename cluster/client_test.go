@@ -829,6 +829,67 @@ func Test_ClientRetry_ContextCanceled(t *testing.T) {
 	}
 }
 
+// Test_ClientRejectedCommandDropsConnection checks that a connection on which
+// the service rejected a command, and which the service then closes, is not
+// returned to the pool, while a connection carrying an ordinary error is.
+func Test_ClientRejectedCommandDropsConnection(t *testing.T) {
+	query := func(c *Client, addr string) error {
+		_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
+			addr, nil, time.Second, 0)
+		return err
+	}
+	backup := func(c *Client, addr string) error {
+		_, err := c.Backup(context.Background(), &command.BackupRequest{}, addr, nil, time.Second, io.Discard)
+		return err
+	}
+	for _, tc := range []struct {
+		name     string
+		send     func(c *Client, addr string) error
+		errStr   string
+		wantIdle int
+	}{
+		{"unauthorized", query, unauthorizedError, 0},
+		{"unsupported", query, unsupportedError, 0},
+		{"other_error", query, "no such table", 1},
+		{"backup_error", backup, "BackupRequest is nil", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := servicetest.NewService()
+			srv.Handler = func(conn net.Conn) {
+				c := readCommand(conn)
+				if c == nil {
+					return
+				}
+				p, err := errorResponse(c.Type, tc.errStr)
+				if err != nil {
+					t.Errorf("failed to build error response: %s", err)
+					conn.Close()
+					return
+				}
+				writeBytesWithLength(conn, p)
+				if tc.wantIdle == 0 {
+					conn.Close() // As the real service does after rejecting a command.
+				}
+			}
+			srv.Start()
+			defer srv.Close()
+
+			c := NewClient(&simpleDialer{}, 0)
+			err := tc.send(c, srv.Addr())
+			if err == nil || err.Error() != tc.errStr {
+				t.Fatalf("expected error %q, got %v", tc.errStr, err)
+			}
+
+			c.poolMu.RLock()
+			pl := c.pools[srv.Addr()]
+			c.poolMu.RUnlock()
+			if got := pl.Len(); got != tc.wantIdle {
+				t.Fatalf("expected %d idle connection(s) in pool, got %d", tc.wantIdle, got)
+			}
+		})
+	}
+}
+
 func readCommand(conn net.Conn) *proto.Command {
 	b := make([]byte, protoBufferLengthSize)
 	_, err := io.ReadFull(conn, b)

@@ -299,6 +299,9 @@ func (c *Client) Backup(ctx context.Context, br *command.BackupRequest, nodeAddr
 		return 0, err
 	}
 	if a.Error != "" {
+		// The service ends the connection after any error reply to a
+		// backup stream request, so this connection must not be reused.
+		handleConnError(conn)
 		return 0, errors.New(a.Error)
 	}
 
@@ -712,7 +715,18 @@ func roundTripConn(conn net.Conn, command *proto.Command, timeout time.Duration,
 	if err := pb.Unmarshal(p, resp); err != nil {
 		return fmt.Errorf("protobuf unmarshal: %w", err)
 	}
+	if r, ok := resp.(interface{ GetError() string }); ok && closesConnection(r.GetError()) {
+		handleConnError(conn)
+	}
 	return nil
+}
+
+// closesConnection returns whether a reply carrying the given error is the
+// last thing the remote Service sends on the connection before closing it.
+// Such a connection must not go back into the pool, where the next command
+// sent on it would fail.
+func closesConnection(errStr string) bool {
+	return errStr == unauthorizedError || errStr == unsupportedError
 }
 
 // retry retries a command on a remote node, unmarshaling the reply into resp.
