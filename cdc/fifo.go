@@ -51,6 +51,7 @@ type Queue struct {
 	enqueueChan     chan enqueueReq
 	deleteRangeChan chan deleteRangeReq
 	queryChan       chan queryReq
+	rewindChan      chan chan struct{}
 	done            chan struct{}
 
 	// C is the channel for consuming queue events.
@@ -107,6 +108,7 @@ func NewQueue(path string) (*Queue, error) {
 		enqueueChan:     make(chan enqueueReq, queueBufferSize),
 		deleteRangeChan: make(chan deleteRangeReq),
 		queryChan:       make(chan queryReq),
+		rewindChan:      make(chan chan struct{}),
 		done:            make(chan struct{}),
 		eventsChan:      eventsChan,
 		C:               eventsChan,
@@ -214,6 +216,19 @@ func (q *Queue) HasNext() bool {
 	q.queryChan <- req
 	resp := <-req.respChan
 	return resp.hasNext
+}
+
+// Rewind makes the queue emit items again from the first item it holds,
+// including items already read from C but not yet deleted.
+func (q *Queue) Rewind() {
+	select {
+	case <-q.done:
+		return
+	default:
+	}
+	ch := make(chan struct{})
+	q.rewindChan <- ch
+	<-ch
 }
 
 // Len returns the number of items currently in the queue.
@@ -362,6 +377,14 @@ func (q *Queue) run(highestKey uint64) {
 					panic(fmt.Sprintf("failed to load head after delete: %v", err))
 				}
 			}
+
+		case ch := <-q.rewindChan:
+			nextFrom = 0
+			nextEv = nil
+			if err := loadHead(); err != nil {
+				panic(fmt.Sprintf("failed to load head after rewind: %v", err))
+			}
+			close(ch)
 
 		case req := <-q.queryChan:
 			var isEmpty bool
