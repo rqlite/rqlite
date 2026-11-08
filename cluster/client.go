@@ -11,7 +11,6 @@ import (
 	"net"
 	"os"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/rqlite/rqlite/v10/auth"
@@ -83,17 +82,14 @@ type Client struct {
 
 	poolMu sync.RWMutex
 	pools  map[string]pool.Pool
-
-	// Whitebox testing
-	numForcedNewConns atomic.Int32
 }
 
 // NewClient returns a client instance for talking to a remote node.
-// Clients will retry certain commands if they fail, to allow for
-// remote node restarts. Cluster management operations such as joining
-// and removing nodes are not retried, to make it clear to the operator
-// that the operation failed. In addition, higher-level code will
-// usually retry these operations.
+// Commands are sent exactly once unless the caller asks for retries; see
+// retry for what a retry can mean for a write. Cluster management
+// operations such as joining and removing nodes are never retried, to
+// make it clear to the operator that the operation failed. In addition,
+// higher-level code will usually retry these operations.
 func NewClient(dl Dialer, t time.Duration) *Client {
 	return &Client{
 		dialer:  dl,
@@ -650,11 +646,9 @@ func (c *Client) Stats() (map[string]any, error) {
 	return stats, nil
 }
 
+// dial returns a connection to the node at nodeAddr from that node's pool,
+// creating the pool first if this is the first time the node is dialed.
 func (c *Client) dial(nodeAddr string) (net.Conn, error) {
-	return c.dialWithOption(nodeAddr, false)
-}
-
-func (c *Client) dialWithOption(nodeAddr string, forceNew bool) (net.Conn, error) {
 	var pl pool.Pool
 	var ok bool
 
@@ -686,10 +680,6 @@ func (c *Client) dialWithOption(nodeAddr string, forceNew bool) (net.Conn, error
 		}
 	}
 
-	// Got pool, now get a connection.
-	if forceNew {
-		return pl.New()
-	}
 	return pl.Get()
 }
 
@@ -702,11 +692,7 @@ func (c *Client) roundTrip(nodeAddr string, command *proto.Command, timeout time
 		return err
 	}
 	defer conn.Close()
-	return roundTripConn(conn, command, timeout, resp)
-}
 
-// roundTripConn performs the exchange in roundTrip on an existing connection.
-func roundTripConn(conn net.Conn, command *proto.Command, timeout time.Duration, resp pb.Message) error {
 	p, err := writeCommandReadResponse(conn, command, timeout)
 	if err != nil {
 		handleConnError(conn)
@@ -729,38 +715,32 @@ func closesConnection(errStr string) bool {
 	return errStr == unauthorizedError || errStr == unsupportedError
 }
 
-// retry retries a command on a remote node, unmarshaling the reply into resp.
-// It does this so we churn through connections in the pool if we hit an error,
-// as the remote node may have restarted and the pool's connections are now stale.
-// It returns the number of retries performed.
+// retry sends command to the node at nodeAddr, unmarshaling the reply into
+// resp, and on failure sends it again up to maxRetries more times. It returns
+// the number of times the command was re-sent.
+//
+// With maxRetries of zero the command is sent exactly once. If that attempt
+// fails -- whether the dial, the write, the read, or parsing the reply -- the
+// error goes back to the caller, who cannot know whether the remote node
+// acted on the command. A caller that asks for retries accepts that a command
+// the remote node did act on, but whose reply was lost, is sent again, so a
+// write may be applied more than once.
 func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr string, timeout time.Duration, maxRetries int, resp pb.Message) (int, error) {
-	effectiveRetries := max(1, maxRetries)
 	nRetries := 0
-
 	for {
 		if err := ctx.Err(); err != nil {
 			return nRetries, err
 		}
-		if err := c.roundTrip(nodeAddr, command, timeout, resp); err == nil {
-			return nRetries, nil
+		err := c.roundTrip(nodeAddr, command, timeout, resp)
+		// nRetries is the number of re-sends made so far, which the caller
+		// records in its stats, so it is checked before it is bumped: when the
+		// budget is spent, or the context is done, no re-send follows and the
+		// count must not grow.
+		if err == nil || nRetries >= maxRetries || ctx.Err() != nil {
+			return nRetries, err
 		}
 		nRetries++
 		stats.Add(numClientRetries, 1)
-
-		// If we're on the last retry, then try one more time with an explicitly new connection.
-		// We do this because it's possible that the remote node restarted and all the connections
-		// in the pool are stale, but we just don't know it. This is a last-ditch effort to get a
-		// successful response before giving up.
-		if nRetries == effectiveRetries {
-			conn, err := c.dialWithOption(nodeAddr, true)
-			if err != nil {
-				return nRetries, err
-			}
-			defer conn.Close()
-			c.numForcedNewConns.Add(1)
-			stats.Add(numClientForceNewConn, 1)
-			return nRetries, roundTripConn(conn, command, timeout, resp)
-		}
 	}
 }
 

@@ -1100,6 +1100,8 @@ func Test_ServiceConnLimiterRejectAndRelease(t *testing.T) {
 	if err := s.SetConnectionLimit(1); err != nil {
 		t.Fatalf("failed to set connection limit: %s", err)
 	}
+	released := make(chan struct{}, 8)
+	s.connReleased = func() { released <- struct{}{} }
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open cluster service")
@@ -1125,9 +1127,15 @@ func Test_ServiceConnLimiterRejectAndRelease(t *testing.T) {
 		t.Fatalf("expected connection to be rejected without timing out, got: %v", err)
 	}
 
-	// Releasing the idle connection should free its limiter slot.
+	// Releasing the idle connection should free its limiter slot. The service
+	// learns of the close in its own time, so wait for it to let the slot go.
 	if err := md.CloseConn(0); err != nil {
 		t.Fatalf("failed to close first connection: %s", err)
+	}
+	select {
+	case <-released:
+	case <-time.After(5 * time.Second):
+		t.Fatal("service did not release the limiter slot")
 	}
 
 	// A new client request should be accepted once capacity is available again.
