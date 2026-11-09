@@ -3,7 +3,6 @@ package pool
 import (
 	"net"
 	"sync"
-	"sync/atomic"
 )
 
 // Conn is a wrapper around net.Conn to modify the behavior of
@@ -21,8 +20,7 @@ func (p *Conn) Close() error {
 	defer p.mu.Unlock()
 	if p.unusable {
 		if p.Conn != nil {
-			atomic.AddInt64(&p.c.nOpenConns, -1)
-			return p.Conn.Close()
+			return p.c.discard(p.Conn)
 		}
 		return nil
 	}

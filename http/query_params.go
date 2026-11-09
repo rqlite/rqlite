@@ -226,7 +226,10 @@ func (qp QueryParams) Timeout(def time.Duration) time.Duration {
 	return d
 }
 
-// Retries returns the requested number of retries.
+// Retries returns the requested number of retries. A retry re-sends a
+// request forwarded to another node after a failure, including a failure
+// to hear back from a node that may have acted on the request, so a write
+// may be applied more than once when retries are requested.
 func (qp QueryParams) Retries(def int) int {
 	i, ok := qp["retries"]
 	if !ok {

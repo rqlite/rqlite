@@ -59,7 +59,6 @@ const (
 	numClientRequestRetries     = "num_client_request_retries"
 	numClientReadTimeouts       = "num_client_read_timeouts"
 	numClientWriteTimeouts      = "num_client_write_timeouts"
-	numClientForceNewConn       = "num_client_force_new_conn"
 
 	// Client stats for this package.
 	numGetNodeAPIRequestLocal = "num_get_node_api_req_local"
@@ -114,7 +113,6 @@ func ResetStats() {
 	stats.Add(numClientRequestRetries, 0)
 	stats.Add(numClientReadTimeouts, 0)
 	stats.Add(numClientWriteTimeouts, 0)
-	stats.Add(numClientForceNewConn, 0)
 	stats.Add(numConnRejected, 0)
 	stats.Add(numUnauthorizedRequest, 0)
 }
@@ -205,6 +203,10 @@ type Service struct {
 
 	// connLimiterCh limits the number of in-service connections.
 	connLimiterCh chan struct{}
+
+	// connReleased, if set, is called each time a connection gives back its
+	// place in the limiter. Tests use it to wait for that moment.
+	connReleased func()
 
 	hwmMu      sync.RWMutex
 	hwmUpdateC chan<- uint64 // Channel for HWM updates
@@ -347,7 +349,12 @@ func (s *Service) serve() error {
 		select {
 		case s.connLimiterCh <- struct{}{}:
 			go func() {
-				defer func() { <-s.connLimiterCh }()
+				defer func() {
+					<-s.connLimiterCh
+					if s.connReleased != nil {
+						s.connReleased()
+					}
+				}()
 				s.handleConn(conn)
 			}()
 		default:

@@ -3,10 +3,13 @@ package cluster
 import (
 	"context"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"io"
 	"net"
+	"os"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -502,12 +505,11 @@ func Test_ClientJoinNode_MaxRedirectsExceeded(t *testing.T) {
 
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {
-		redirects <- struct{}{}
-
 		c := readCommand(conn)
 		if c == nil {
 			return
 		}
+		redirects <- struct{}{}
 		if c.Type != proto.Command_COMMAND_TYPE_JOIN {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
@@ -600,12 +602,11 @@ func Test_ClientJoinNode_SuccessAfterRedirect(t *testing.T) {
 
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {
-		attempts <- struct{}{}
-
 		c := readCommand(conn)
 		if c == nil {
 			return
 		}
+		attempts <- struct{}{}
 		if c.Type != proto.Command_COMMAND_TYPE_JOIN {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
@@ -648,20 +649,41 @@ func Test_ClientJoinNode_SuccessAfterRedirect(t *testing.T) {
 	}
 }
 
-func Test_ClientRetry_SuccessFirstAttempt(t *testing.T) {
-	srv := servicetest.NewService()
-	srv.Handler = func(conn net.Conn) {
+// countingHandler wraps a handler so a test can see how many commands the
+// server read.
+type countingHandler struct {
+	commands atomic.Int32
+}
+
+// handle returns a servicetest handler that reads a command, counts it, and
+// then hands the connection and command to f. f is not called if no command
+// arrived.
+func (h *countingHandler) handle(f func(conn net.Conn, c *proto.Command)) func(net.Conn) {
+	return func(conn net.Conn) {
 		c := readCommand(conn)
 		if c == nil {
 			return
 		}
-		p, err := pb.Marshal(&proto.CommandQueryResponse{})
-		if err != nil {
-			conn.Close()
-			return
-		}
-		writeBytesWithLength(conn, p)
+		h.commands.Add(1)
+		f(conn, c)
 	}
+}
+
+func mustWriteQueryResponse(conn net.Conn) {
+	p, err := pb.Marshal(&proto.CommandQueryResponse{})
+	if err != nil {
+		conn.Close()
+		return
+	}
+	writeBytesWithLength(conn, p)
+}
+
+func Test_ClientRetry_SuccessFirstAttempt(t *testing.T) {
+	h := &countingHandler{}
+	srv := servicetest.NewService()
+	srv.Handler = h.handle(func(conn net.Conn, _ *proto.Command) {
+		mustWriteQueryResponse(conn)
+	})
 	srv.Start()
 	defer srv.Close()
 
@@ -671,103 +693,94 @@ func Test_ClientRetry_SuccessFirstAttempt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected success on first attempt, got: %s", err)
 	}
-	if c.numForcedNewConns.Load() != 0 {
-		t.Fatalf("expected no forced new connections, got %d", c.numForcedNewConns.Load())
+	if exp, got := int32(1), h.commands.Load(); exp != got {
+		t.Fatalf("expected command to be sent %d time, got %d", exp, got)
 	}
 }
 
-func Test_ClientRetry_FailAllPoolThenFreshSucceeds(t *testing.T) {
-	// Simulate a node that restarted: the first connection (from pool) fails,
-	// but a fresh connection succeeds.
-	var connCount int
-	var mu sync.Mutex
-	srv := servicetest.NewService()
-	srv.Handler = func(conn net.Conn) {
-		mu.Lock()
-		connCount++
-		n := connCount
-		mu.Unlock()
+func Test_ClientRetry_ZeroRetries_SingleAttempt(t *testing.T) {
+	// With zero retries, or a nonsensical negative count, a failing server
+	// is tried exactly once.
+	for _, retries := range []int{0, -1} {
+		t.Run(fmt.Sprint(retries), func(t *testing.T) {
+			h := &countingHandler{}
+			srv := servicetest.NewService()
+			srv.Handler = h.handle(func(conn net.Conn, _ *proto.Command) {
+				conn.Close()
+			})
+			srv.Start()
+			defer srv.Close()
 
-		c := readCommand(conn)
-		if c == nil {
-			return
-		}
-
-		// First connection fails (simulating stale pool connection reading response),
-		// second succeeds.
-		if n == 1 {
-			conn.Close()
-			return
-		}
-		p, err := pb.Marshal(&proto.CommandQueryResponse{})
-		if err != nil {
-			conn.Close()
-			return
-		}
-		writeBytesWithLength(conn, p)
+			c := NewClient(&simpleDialer{}, 0)
+			_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
+				srv.Addr(), nil, time.Second, retries)
+			if err == nil {
+				t.Fatal("expected error with no retries and a failing server")
+			}
+			if exp, got := int32(1), h.commands.Load(); exp != got {
+				t.Fatalf("expected command to be sent %d time, got %d", exp, got)
+			}
+		})
 	}
+}
+
+func Test_ClientRetry_FailThenSucceed(t *testing.T) {
+	// The first attempt fails, the one retry asked for succeeds.
+	h := &countingHandler{}
+	srv := servicetest.NewService()
+	srv.Handler = h.handle(func(conn net.Conn, _ *proto.Command) {
+		if h.commands.Load() == 1 {
+			conn.Close()
+			return
+		}
+		mustWriteQueryResponse(conn)
+	})
 	srv.Start()
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
 	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
-		srv.Addr(), nil, time.Second, 0)
+		srv.Addr(), nil, time.Second, 1)
 	if err != nil {
-		t.Fatalf("expected fresh connection to succeed, got: %s", err)
+		t.Fatalf("expected retry to succeed, got: %s", err)
 	}
-	if exp, got := int32(1), c.numForcedNewConns.Load(); exp != got {
-		t.Fatalf("expected %d forced new connection, got %d", exp, got)
+	if exp, got := int32(2), h.commands.Load(); exp != got {
+		t.Fatalf("expected command to be sent %d times, got %d", exp, got)
 	}
 }
 
 func Test_ClientRetry_AllAttemptsFail(t *testing.T) {
-	// Server immediately closes every connection — both pool and fresh should fail.
+	// Server closes every connection: the attempt and its one retry both fail.
+	h := &countingHandler{}
 	srv := servicetest.NewService()
-	srv.Handler = func(conn net.Conn) {
-		readCommand(conn)
+	srv.Handler = h.handle(func(conn net.Conn, _ *proto.Command) {
 		conn.Close()
-	}
+	})
 	srv.Start()
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
 	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
-		srv.Addr(), nil, time.Second, 0)
+		srv.Addr(), nil, time.Second, 1)
 	if err == nil {
 		t.Fatal("expected error when all attempts fail")
 	}
-	if exp, got := int32(1), c.numForcedNewConns.Load(); exp != got {
-		t.Fatalf("expected %d forced new connection, got %d", exp, got)
+	if exp, got := int32(2), h.commands.Load(); exp != got {
+		t.Fatalf("expected command to be sent %d times, got %d", exp, got)
 	}
 }
 
-func Test_ClientRetry_SuccessMidPool(t *testing.T) {
-	// With maxRetries=3, fail the first 2 pool attempts, succeed on the 3rd.
-	// The fresh dial should never be needed.
-	var connCount int
-	var mu sync.Mutex
+func Test_ClientRetry_SuccessOnThirdAttempt(t *testing.T) {
+	// With 3 retries, fail the first 2 attempts and succeed on the 3rd.
+	h := &countingHandler{}
 	srv := servicetest.NewService()
-	srv.Handler = func(conn net.Conn) {
-		mu.Lock()
-		connCount++
-		n := connCount
-		mu.Unlock()
-
-		c := readCommand(conn)
-		if c == nil {
-			return
-		}
-		if n <= 2 {
+	srv.Handler = h.handle(func(conn net.Conn, _ *proto.Command) {
+		if h.commands.Load() <= 2 {
 			conn.Close()
 			return
 		}
-		p, err := pb.Marshal(&proto.CommandQueryResponse{})
-		if err != nil {
-			conn.Close()
-			return
-		}
-		writeBytesWithLength(conn, p)
-	}
+		mustWriteQueryResponse(conn)
+	})
 	srv.Start()
 	defer srv.Close()
 
@@ -775,38 +788,96 @@ func Test_ClientRetry_SuccessMidPool(t *testing.T) {
 	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
 		srv.Addr(), nil, time.Second, 3)
 	if err != nil {
-		t.Fatalf("expected success on 3rd pool attempt, got: %s", err)
+		t.Fatalf("expected success on 3rd attempt, got: %s", err)
 	}
-	if exp, got := int32(0), c.numForcedNewConns.Load(); exp != got {
-		t.Fatalf("expected %d forced new connection, got %d", exp, got)
+	if exp, got := int32(3), h.commands.Load(); exp != got {
+		t.Fatalf("expected command to be sent %d times, got %d", exp, got)
 	}
 }
 
-func Test_ClientRetry_ZeroMaxRetries_NoInfiniteLoop(t *testing.T) {
-	// Regression test: with maxRetries=0, a failing server must not cause
-	// an infinite retry loop. The function must return an error promptly.
-	srv := servicetest.NewService()
-	srv.Handler = func(conn net.Conn) {
-		readCommand(conn)
-		conn.Close()
+// Test_ClientWrite_ZeroRetries_NotResentAfterTimeout is the regression test
+// for issue 3000: a write forwarded to a node that does not reply in time
+// must not be sent again when no retries were asked for, since the node may
+// have applied it. Every kind of command that changes the database is covered.
+func Test_ClientWrite_ZeroRetries_NotResentAfterTimeout(t *testing.T) {
+	const timeout = 100 * time.Millisecond
+	for _, tc := range []struct {
+		name string
+		typ  proto.Command_Type
+		send func(c *Client, addr string) error
+	}{
+		{"execute", proto.Command_COMMAND_TYPE_EXECUTE, func(c *Client, addr string) error {
+			_, _, err := c.Execute(context.Background(), executeRequestFromString("INSERT INTO foo(name) VALUES('fiona')"),
+				addr, nil, timeout, 0)
+			return err
+		}},
+		{"request", proto.Command_COMMAND_TYPE_REQUEST, func(c *Client, addr string) error {
+			_, _, _, err := c.Request(context.Background(), executeQueryRequestFromString("INSERT INTO foo(name) VALUES('fiona')"),
+				addr, nil, timeout, 0)
+			return err
+		}},
+		{"load", proto.Command_COMMAND_TYPE_LOAD, func(c *Client, addr string) error {
+			return c.Load(context.Background(), &command.LoadRequest{Data: []byte("SQLite format 3")},
+				addr, nil, timeout, 0)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			release := make(chan struct{})
+			t.Cleanup(func() { close(release) })
+
+			h := &countingHandler{}
+			srv := servicetest.NewService()
+			srv.Handler = h.handle(func(conn net.Conn, c *proto.Command) {
+				if c.Type != tc.typ {
+					t.Errorf("unexpected command type: %d", c.Type)
+				}
+				<-release // The slow node: never replies in time.
+			})
+			srv.Start()
+			defer srv.Close()
+
+			err := tc.send(NewClient(&simpleDialer{}, 0), srv.Addr())
+			if !errors.Is(err, os.ErrDeadlineExceeded) {
+				t.Fatalf("expected a timeout error, got: %v", err)
+			}
+			if exp, got := int32(1), h.commands.Load(); exp != got {
+				t.Fatalf("expected write to be sent %d time, got %d", exp, got)
+			}
+		})
 	}
+}
+
+// Test_ClientExecute_Retry_ResentAfterTimeout shows what asking for a retry
+// means: a write whose reply did not arrive in time is sent again.
+func Test_ClientExecute_Retry_ResentAfterTimeout(t *testing.T) {
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+
+	h := &countingHandler{}
+	srv := servicetest.NewService()
+	srv.Handler = h.handle(func(conn net.Conn, _ *proto.Command) {
+		if h.commands.Load() == 1 {
+			<-release // The first attempt never gets its reply.
+			return
+		}
+		p, err := pb.Marshal(&proto.CommandExecuteResponse{})
+		if err != nil {
+			conn.Close()
+			return
+		}
+		writeBytesWithLength(conn, p)
+	})
 	srv.Start()
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, _, err := c.Query(ctx, queryRequestFromString("SELECT * FROM foo"),
-		srv.Addr(), nil, time.Second, 0)
-	if err == nil {
-		t.Fatal("expected error with maxRetries=0 and failing server")
+	_, _, err := c.Execute(context.Background(), executeRequestFromString("INSERT INTO foo(name) VALUES('fiona')"),
+		srv.Addr(), nil, 100*time.Millisecond, 1)
+	if err != nil {
+		t.Fatalf("expected retry to succeed, got: %s", err)
 	}
-	if ctx.Err() != nil {
-		t.Fatal("retry loop did not terminate before context timeout — possible infinite loop")
-	}
-	if exp, got := int32(1), c.numForcedNewConns.Load(); exp != got {
-		t.Fatalf("expected %d forced new connection, got %d", exp, got)
+	if exp, got := int32(2), h.commands.Load(); exp != got {
+		t.Fatalf("expected write to be sent %d times, got %d", exp, got)
 	}
 }
 
@@ -830,6 +901,131 @@ func Test_ClientRetry_ContextCanceled(t *testing.T) {
 		t.Fatal("expected error when context is canceled")
 	}
 }
+
+// Test_ClientRejectedCommandDropsConnection checks that a connection on which
+// the service rejected a command, and which the service then closes, is not
+// returned to the pool, while a connection carrying an ordinary error is.
+func Test_ClientRejectedCommandDropsConnection(t *testing.T) {
+	query := func(c *Client, addr string) error {
+		_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
+			addr, nil, time.Second, 0)
+		return err
+	}
+	backup := func(c *Client, addr string) error {
+		_, err := c.Backup(context.Background(), &command.BackupRequest{}, addr, nil, time.Second, io.Discard)
+		return err
+	}
+	for _, tc := range []struct {
+		name     string
+		send     func(c *Client, addr string) error
+		errStr   string
+		wantIdle int
+	}{
+		{"unauthorized", query, unauthorizedError, 0},
+		{"unsupported", query, unsupportedError, 0},
+		{"other_error", query, "no such table", 1},
+		{"backup_error", backup, "BackupRequest is nil", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := servicetest.NewService()
+			srv.Handler = func(conn net.Conn) {
+				c := readCommand(conn)
+				if c == nil {
+					return
+				}
+				p, err := errorResponse(c.Type, tc.errStr)
+				if err != nil {
+					t.Errorf("failed to build error response: %s", err)
+					conn.Close()
+					return
+				}
+				writeBytesWithLength(conn, p)
+				if tc.wantIdle == 0 {
+					conn.Close() // As the real service does after rejecting a command.
+				}
+			}
+			srv.Start()
+			defer srv.Close()
+
+			c := NewClient(&simpleDialer{}, 0)
+			err := tc.send(c, srv.Addr())
+			if err == nil || err.Error() != tc.errStr {
+				t.Fatalf("expected error %q, got %v", tc.errStr, err)
+			}
+
+			c.poolMu.RLock()
+			pl := c.pools[srv.Addr()]
+			c.poolMu.RUnlock()
+			if got := pl.Len(); got != tc.wantIdle {
+				t.Fatalf("expected %d idle connection(s) in pool, got %d", tc.wantIdle, got)
+			}
+		})
+	}
+}
+
+// Test_ClientRetry_FailureBeforeReply checks that a failure to dial or to
+// write keeps to the retry budget just as a failure to read does, and that a
+// cancelled context ends the attempts at once, with no retry counted that
+// never happened.
+func Test_ClientRetry_FailureBeforeReply(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		retries      int
+		cancel       bool // Cancel the context during the first dial.
+		writeFails   bool // Dial succeeds but every write fails.
+		wantAttempts int
+		wantRetries  int
+	}{
+		{"dial_fails_no_retries", 0, false, false, 1, 0},
+		{"dial_fails_two_retries", 2, false, false, 3, 2},
+		{"write_fails_no_retries", 0, false, true, 1, 0},
+		{"write_fails_two_retries", 2, false, true, 3, 2},
+		{"cancelled", 2, true, false, 1, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			attempts := 0
+			dialer := funcDialer(func(string, time.Duration) (net.Conn, error) {
+				attempts++
+				if tc.cancel {
+					cancel()
+				}
+				if tc.writeFails {
+					a, b := net.Pipe()
+					t.Cleanup(func() { b.Close() })
+					return writeFailConn{a}, nil
+				}
+				return nil, errors.New("dial failed")
+			})
+
+			c := NewClient(dialer, 0)
+			cmd := &proto.Command{Type: proto.Command_COMMAND_TYPE_QUERY}
+			nRetries, err := c.retry(ctx, cmd, "unused", time.Second, tc.retries, &proto.CommandQueryResponse{})
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if attempts != tc.wantAttempts {
+				t.Fatalf("expected %d attempt(s), got %d", tc.wantAttempts, attempts)
+			}
+			if nRetries != tc.wantRetries {
+				t.Fatalf("expected %d retries reported, got %d", tc.wantRetries, nRetries)
+			}
+		})
+	}
+}
+
+// funcDialer is a Dialer backed by a function.
+type funcDialer func(address string, timeout time.Duration) (net.Conn, error)
+
+func (d funcDialer) Dial(address string, timeout time.Duration) (net.Conn, error) {
+	return d(address, timeout)
+}
+
+// writeFailConn is a connection on which every write fails.
+type writeFailConn struct{ net.Conn }
+
+func (writeFailConn) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
 
 func readCommand(conn net.Conn) *proto.Command {
 	b := make([]byte, protoBufferLengthSize)
