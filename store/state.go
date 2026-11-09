@@ -173,7 +173,8 @@ func HasData(dir string) (bool, error) {
 // holds the peers file, explaining to operators why the directory exists.
 const recoveryREADMEName = "README"
 
-const recoveryREADME = `This directory is used to recover a cluster that has lost quorum.
+const recoveryREADME = `
+This directory is used to recover a cluster that has lost quorum.
 
 At startup rqlite checks this directory for a file named peers.json and, if
 present, uses it to force a new cluster configuration. After a successful
@@ -182,6 +183,7 @@ cluster this directory will be otherwise empty, and can be ignored.
 
 For the full recovery procedure see:
 https://rqlite.io/docs/clustering/general-guidelines/#dealing-with-failure
+
 `
 
 // writeRecoveryREADME writes a README to dir, the directory in which the peers
