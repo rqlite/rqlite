@@ -314,6 +314,69 @@ func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 	}
 }
 
+// Test_ClientDoesNotPoolClosedConnection checks that a connection on which a
+// node rejected a command, and so is about to close, is not returned to the
+// client's pool for the next command to fail on.
+func Test_ClientDoesNotPoolClosedConnection(t *testing.T) {
+	ml := mustNewMockTransport()
+	f := func(username, password, perm string) bool {
+		return username == "alice" && password == "secret1" && perm == "execute"
+	}
+	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), &mockCredentialStore{aaFunc: f})
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service: %s", err)
+	}
+	defer s.Close()
+
+	cl := NewClient(ml, 30*time.Second)
+	er := &command.ExecuteRequest{}
+
+	// An accepted command leaves its connection in the pool.
+	if _, _, err := cl.Execute(context.Background(), er, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second, noRetries); err != nil {
+		t.Fatalf("alice failed to execute: %s", err)
+	}
+	if n := idleConns(t, cl, s.Addr()); n != 1 {
+		t.Fatalf("expected 1 idle connection after accepted command, got %d", n)
+	}
+
+	// A rejected command uses that connection, which the node then closes.
+	// It must not go back in the pool.
+	_, _, err := cl.Execute(context.Background(), er, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second, noRetries)
+	if err == nil || err.Error() != "unauthorized" {
+		t.Fatalf("expected bob to be unauthorized, got %v", err)
+	}
+	if n := idleConns(t, cl, s.Addr()); n != 0 {
+		t.Fatalf("expected 0 idle connections after rejected command, got %d", n)
+	}
+
+	// The next command gets a fresh connection and succeeds first time.
+	if _, _, err := cl.Execute(context.Background(), er, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second, noRetries); err != nil {
+		t.Fatalf("alice failed to execute after rejected command: %s", err)
+	}
+	if exp, got := int32(0), cl.numForcedNewConns.Load(); exp != got {
+		t.Fatalf("expected %d forced new connections, got %d", exp, got)
+	}
+}
+
+// idleConns returns the number of idle pooled connections the client holds
+// to the node at addr.
+func idleConns(t *testing.T, c *Client, addr string) int {
+	t.Helper()
+	st, err := c.Stats()
+	if err != nil {
+		t.Fatalf("failed to get client stats: %s", err)
+	}
+	pools, ok := st["conn_pool_stats"].(map[string]any)
+	if !ok {
+		return 0
+	}
+	ps, ok := pools[addr].(map[string]any)
+	if !ok {
+		return 0
+	}
+	return ps["idle"].(int)
+}
+
 func Test_NewServiceNotify(t *testing.T) {
 	ml := mustNewMockTransport()
 	mm := mustNewMockManager()
@@ -374,7 +437,7 @@ func Test_NewServiceNotify(t *testing.T) {
 
 // errResponse is any cluster response message that carries an error string.
 type errResponse interface {
-	pb.Message
+	proto.Response
 	GetError() string
 }
 
@@ -634,7 +697,7 @@ func Test_ServiceUnauthorizedClosesConnection(t *testing.T) {
 				if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
 					t.Fatalf("failed to write command: %s", err)
 				}
-				p, err := readResponse(conn, 5*time.Second)
+				p, err := readFrame(conn, 5*time.Second)
 				if err != nil {
 					t.Fatalf("failed to read response: %s", err)
 				}
@@ -650,6 +713,9 @@ func Test_ServiceUnauthorizedClosesConnection(t *testing.T) {
 				}
 				if resp.GetError() != "unauthorized" {
 					t.Fatalf("failed to get correct error, exp %s, got %q", "unauthorized", resp.GetError())
+				}
+				if !resp.GetCloseConnection() {
+					t.Fatal("response does not tell the client the connection is closing")
 				}
 
 				// The node must now close the connection. Once it has, the
@@ -704,13 +770,17 @@ func Test_ServiceOpenCommandsNeedNoPermission(t *testing.T) {
 			if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
 				t.Fatalf("failed to write %s command: %s", typ, err)
 			}
-			p, err := readResponse(conn, 5*time.Second)
+			p, err := readFrame(conn, 5*time.Second)
 			if err != nil {
 				t.Fatalf("failed to read %s response: %s", typ, err)
 			}
 			if typ == proto.Command_COMMAND_TYPE_GET_NODE_META {
-				if err := pb.Unmarshal(p, &proto.NodeMeta{}); err != nil {
+				meta := &proto.NodeMeta{}
+				if err := pb.Unmarshal(p, meta); err != nil {
 					t.Fatalf("failed to unmarshal node meta response: %s", err)
+				}
+				if meta.GetCloseConnection() {
+					t.Fatal("node meta response claims the connection is closing")
 				}
 			}
 		}
@@ -779,7 +849,7 @@ func Test_ServiceUnsupportedCommandClosesConnection(t *testing.T) {
 			if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
 				t.Fatalf("failed to write command: %s", err)
 			}
-			p, err := readResponse(conn, 5*time.Second)
+			p, err := readFrame(conn, 5*time.Second)
 			if err != nil {
 				t.Fatalf("failed to read response: %s", err)
 			}
@@ -789,6 +859,9 @@ func Test_ServiceUnsupportedCommandClosesConnection(t *testing.T) {
 			}
 			if resp.GetError() != "unsupported" {
 				t.Fatalf("failed to get correct error, exp %s, got %q", "unsupported", resp.GetError())
+			}
+			if !resp.GetCloseConnection() {
+				t.Fatal("response does not tell the client the connection is closing")
 			}
 			mustReadClosed(t, conn)
 			if n := asked.Load(); n != 0 {
