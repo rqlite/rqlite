@@ -1,3 +1,36 @@
+## v10.7.0 (unreleased)
+This release provides more options for securing backups in the Cloud, upgrades SQLite to 3.54.1, as well as many minor bug fixes.
+
+### New features
+- [PR #2996](https://github.com/rqlite/rqlite/pull/2996): Support server-side encryption for automatic backups to AWS S3.
+- [PR #3005](https://github.com/rqlite/rqlite/pull/3005): Support CMEK for automatic backups to Google Cloud Storage.
+
+### Implementation changes and bug fixes
+- [PR #3014](https://github.com/rqlite/rqlite/pull/3014): Preserve table data in SQL dumps when table names contain single quotes or column names contain double quotes.
+- [PR #3031](https://github.com/rqlite/rqlite/pull/3031): Move automatic backup retries from the Store provider to the uploader.
+- [PR #3022](https://github.com/rqlite/rqlite/pull/3022): Replace credentials and permissions only after validating the complete auth configuration, leaving the store unchanged on failure.
+- [PR #3015](https://github.com/rqlite/rqlite/pull/3015): Preserve integer precision when selecting fields from the HTTP status response.
+- [PR #3016](https://github.com/rqlite/rqlite/pull/3016): Preserve non-voting nodes in the Store bootstrap configuration.
+- [PR #3021](https://github.com/rqlite/rqlite/pull/3021): Reject malformed queued-write requests with the wait flag while preserving empty-array and null requests used to wait for the queue to flush.
+- [PR #3019](https://github.com/rqlite/rqlite/pull/3019): Reject trailing JSON values and junk in leader stepdown requests before changing leadership.
+- [PR #3017](https://github.com/rqlite/rqlite/pull/3017): Return the correct elapsed time for HTTP database loads requested with timings.
+- [PR #3013](https://github.com/rqlite/rqlite/pull/3013): Avoid creating Raft state when checking an empty data directory for automatic restore.
+- [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
+- [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Accept extension tarballs whose entries are prefixed with `./`.
+- [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Create implicit parent directories with directory permissions when extracting zip and tar.gz archives, instead of the contained file's mode.
+- [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Stop leaking goroutines from the pre-snapshot sync when a registered participant has stopped listening.
+- [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Remove the temporary output file when gzip compression or decompression of a file fails part-way through.
+- [PR #3006](https://github.com/rqlite/rqlite/pull/3006): Reject duplicate usernames in auth config and require an actual JSON array.
+- [PR #3010](https://github.com/rqlite/rqlite/pull/3010): Apply the configured busy timeout to every pooled reader connection, not just the one borrowed when it was set.
+- [PR #3008](https://github.com/rqlite/rqlite/pull/3008): Request reads at `auto` consistency now use the level `auto` resolves correctly.
+- [PR #3008](https://github.com/rqlite/rqlite/pull/3008): Report the Store's `open` status as a boolean, instead of an empty object, in `/status`.
+- [PR #3008](https://github.com/rqlite/rqlite/pull/3008): User-requested snapshot no longer leaves Raft's trailing-logs setting at zero when no snapshot threshold is set.
+- [PR #3009](https://github.com/rqlite/rqlite/pull/3009): Resolve the column names of CDC events for a table created by the same transaction that fills it.
+- [PR #3009](https://github.com/rqlite/rqlite/pull/3009): Match the table names given to a SQL dump regardless of case, so the dump carries the tables along with their indexes and triggers and can be loaded.
+- [PR #3009](https://github.com/rqlite/rqlite/pull/3009): Report the compacted WAL bytes written by a checkpoint which moved every page but could not truncate the WAL.
+- [PR #3009](https://github.com/rqlite/rqlite/pull/3009): Fix a data race when the SQLite compile options are read by concurrent status requests.
+- [PR #3012](https://github.com/rqlite/rqlite/pull/3012): Ignore any frames after the last commit frame when compacting the WAL.
+
 ## v10.6.6 (October 28th 2026)
 ### Implementation changes and bug fixes
 - [PR #2987](https://github.com/rqlite/rqlite/pull/2987): Keep the local auto-backup file if the metadata rename fails. Thanks @lmtlssss

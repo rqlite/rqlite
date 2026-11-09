@@ -112,6 +112,12 @@ func Test_S3ClientUploadOK(t *testing.T) {
 			if exp != got {
 				t.Errorf("expected metadata to contain %q, got %q", exp, got)
 			}
+			if input.ServerSideEncryption != "" {
+				t.Errorf("expected no server-side encryption, got %q", input.ServerSideEncryption)
+			}
+			if input.SSEKMSKeyId != nil {
+				t.Errorf("expected no KMS key ID, got %q", *input.SSEKMSKeyId)
+			}
 			return &manager.UploadOutput{}, nil
 		},
 	}
@@ -133,6 +139,90 @@ func Test_S3ClientUploadOK(t *testing.T) {
 	}
 	if uploadedData.String() != expectedData {
 		t.Errorf("expected uploaded data to be %q, got %q", expectedData, uploadedData.String())
+	}
+}
+
+func Test_S3ClientUploadOK_ServerSideEncryption(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		sse      types.ServerSideEncryption
+		kmsKeyID string
+	}{
+		{"AES256", types.ServerSideEncryptionAes256, ""},
+		{"KMSDefaultKey", types.ServerSideEncryptionAwsKms, ""},
+		{"KMSWithKey", types.ServerSideEncryptionAwsKms, "arn:aws:kms:us-west-2:123456789012:key/abc"},
+		{"DSSEWithKey", types.ServerSideEncryptionAwsKmsDsse, "alias/backups"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mockUploader := &mockUploader{
+				uploadFn: func(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
+					if input.ServerSideEncryption != tc.sse {
+						t.Errorf("expected server-side encryption %q, got %q", tc.sse, input.ServerSideEncryption)
+					}
+					if tc.kmsKeyID == "" {
+						if input.SSEKMSKeyId != nil {
+							t.Errorf("expected no KMS key ID, got %q", *input.SSEKMSKeyId)
+						}
+					} else if input.SSEKMSKeyId == nil || *input.SSEKMSKeyId != tc.kmsKeyID {
+						t.Errorf("expected KMS key ID %q, got %v", tc.kmsKeyID, input.SSEKMSKeyId)
+					}
+					return &manager.UploadOutput{}, nil
+				},
+			}
+			client := &S3Client{
+				bucket:      "your-bucket",
+				key:         "your/key/path",
+				sse:         tc.sse,
+				sseKMSKeyID: tc.kmsKeyID,
+				uploader:    mockUploader,
+			}
+			if err := client.Upload(context.Background(), strings.NewReader("test data"), "some-id"); err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func Test_NewS3Client_ServerSideEncryption(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		sse       string
+		kmsKeyID  string
+		expectErr bool
+	}{
+		{"Unset", "", "", false},
+		{"AES256", "AES256", "", false},
+		{"KMS", "aws:kms", "", false},
+		{"KMSWithKey", "aws:kms", "alias/backups", false},
+		{"DSSE", "aws:kms:dsse", "", false},
+		{"DSSEWithKey", "aws:kms:dsse", "alias/backups", false},
+		{"WrongCase", "aes256", "", true},
+		{"Unknown", "rot13", "", true},
+		{"KeyWithoutAlgorithm", "", "alias/backups", true},
+		{"KeyWithAES256", "AES256", "alias/backups", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := &S3ClientOpts{
+				ServerSideEncryption: tc.sse,
+				SSEKMSKeyID:          tc.kmsKeyID,
+			}
+			c, err := NewS3Client("endpoint1", "region1", "access", "secret", "bucket2", "key3", opts)
+			if tc.expectErr {
+				if !errors.Is(err, ErrInvalidServerSideEncryption) {
+					t.Fatalf("expected ErrInvalidServerSideEncryption, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("error while creating aws S3 client: %v", err)
+			}
+			if string(c.sse) != tc.sse {
+				t.Fatalf("expected server-side encryption %q, got %q", tc.sse, c.sse)
+			}
+			if c.sseKMSKeyID != tc.kmsKeyID {
+				t.Fatalf("expected KMS key ID %q, got %q", tc.kmsKeyID, c.sseKMSKeyID)
+			}
+		})
 	}
 }
 
@@ -477,6 +567,70 @@ func Test_MetadataSet(t *testing.T) {
 	}
 	if id != "the-id" {
 		t.Fatalf("expected ID to be %q, got %q", "the-id", id)
+	}
+}
+
+func Test_ServerSideEncryptionApplied(t *testing.T) {
+	accesskey, ok := os.LookupEnv("RQLITE_S3_ACCESS_KEY")
+	if !ok {
+		t.Skip("RQLITE_S3_ACCESS_KEY is not set")
+	}
+	secretKey, ok := os.LookupEnv("RQLITE_S3_SECRET_ACCESS_KEY")
+	if !ok {
+		t.Skip("RQLITE_S3_SECRET_ACCESS_KEY is not set")
+	}
+
+	for _, tc := range []struct {
+		name         string
+		sse          string
+		expectKMSKey bool
+	}{
+		// With no key ID, S3 falls back to the AWS managed key and reports its ARN.
+		{"AES256", "AES256", false},
+		{"KMSDefaultKey", "aws:kms", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := random.String()
+			opts := &S3ClientOpts{ServerSideEncryption: tc.sse}
+			client, err := NewS3Client("s3.amazonaws.com", "us-west-2", accesskey, secretKey, "rqlite-testing-circleci", path, opts)
+			if err != nil {
+				t.Fatalf("error creating S3 client: %v", err)
+			}
+			if err := client.Upload(context.Background(), strings.NewReader("test data"), "the-id"); err != nil {
+				t.Fatalf("error uploading to S3: %v", err)
+			}
+			defer func() {
+				client.Delete(context.Background())
+			}()
+
+			// S3 reports the encryption it applied to the stored object, not what was requested.
+			head, err := client.s3.HeadObject(context.Background(), &s3.HeadObjectInput{
+				Bucket: aws.String(client.bucket),
+				Key:    aws.String(client.key),
+			})
+			if err != nil {
+				t.Fatalf("error getting object head: %v", err)
+			}
+			if string(head.ServerSideEncryption) != tc.sse {
+				t.Fatalf("expected server-side encryption %q, got %q", tc.sse, head.ServerSideEncryption)
+			}
+			if tc.expectKMSKey {
+				if head.SSEKMSKeyId == nil || *head.SSEKMSKeyId == "" {
+					t.Fatalf("expected a KMS key ID to be reported")
+				}
+			} else if head.SSEKMSKeyId != nil {
+				t.Fatalf("expected no KMS key ID, got %q", *head.SSEKMSKeyId)
+			}
+
+			// The object must still be readable through the normal download path.
+			id, err := client.CurrentID(context.Background())
+			if err != nil {
+				t.Fatalf("error getting current ID: %v", err)
+			}
+			if id != "the-id" {
+				t.Fatalf("expected ID to be %q, got %q", "the-id", id)
+			}
+		})
 	}
 }
 

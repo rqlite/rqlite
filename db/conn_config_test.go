@@ -10,6 +10,8 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/querylog"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 // Test_Open_WALRetainedOnClose tests that with the default connection
@@ -195,7 +197,7 @@ func Test_ConnConfig_Hooks(t *testing.T) {
 			lastUpdate = ev
 			return nil
 		},
-		CommitHook: func() bool {
+		CommitHook: func(*sqlite3.SQLiteConn) bool {
 			commits++
 			return true
 		},

@@ -541,11 +541,11 @@ func (c *Conn) Dump(w io.Writer, tableNames ...string) (n int, retErr error) {
 		}
 		var columnNames []string
 		for _, vv := range r[0].Values {
-			columnNames = append(columnNames, fmt.Sprintf(`'||quote("%s")||'`, vv.Parameters[1].GetS()))
+			columnNames = append(columnNames, fmt.Sprintf(`'||quote("%s")||'`, strings.ReplaceAll(vv.Parameters[1].GetS(), `"`, `""`)))
 		}
 
 		query := fmt.Sprintf(`SELECT 'INSERT INTO "%s" VALUES(%s)' FROM "%s";`,
-			tableIndent,
+			strings.ReplaceAll(tableIndent, "'", "''"),
 			strings.Join(columnNames, ","),
 			tableIndent)
 		r, err = c.Query(ctx, commReq(query), false)

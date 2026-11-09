@@ -1,26 +1,20 @@
 package db
 
 import (
-	"errors"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 )
 
-// Test_CDCCollator_New verifies that a collator requires a column-name
-// provider and starts with no events collected.
+// Test_CDCCollator_New verifies that a collator starts with no events
+// collected.
 func Test_CDCCollator_New(t *testing.T) {
-	if _, err := NewCDCCollator(nil); err == nil {
-		t.Fatal("expected error for nil ColumnsNameProvider")
-	}
-	c, err := NewCDCCollator(&mockColumnNamesProvider{})
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	c := NewCDCCollator()
 	if c == nil {
 		t.Fatal("expected collator to be created, got nil")
 	}
@@ -32,10 +26,8 @@ func Test_CDCCollator_New(t *testing.T) {
 // Test_CDCCollator_CommitOne verifies that a single event committed in one
 // transaction is returned by Events with its column names resolved.
 func Test_CDCCollator_CommitOne(t *testing.T) {
-	np := &mockColumnNamesProvider{
-		columns: map[string][]string{"test_table": {"id", "name", "value"}},
-	}
-	c := mustNewCDCCollator(t, np)
+	conn := mustOpenCollatorConn(t, "CREATE TABLE test_table (id INTEGER PRIMARY KEY, name TEXT, value TEXT)")
+	c := NewCDCCollator()
 
 	c.Reset()
 	change := &command.CDCEvent{
@@ -51,7 +43,7 @@ func Test_CDCCollator_CommitOne(t *testing.T) {
 		t.Fatal("event reached the caller before commit")
 	}
 
-	if !c.CommitHook() {
+	if !c.CommitHook(conn) {
 		t.Fatal("commit hook must always allow the transaction to proceed")
 	}
 	if len(c.Events()) != 1 {
@@ -68,10 +60,8 @@ func Test_CDCCollator_CommitOne(t *testing.T) {
 // Test_CDCCollator_CommitTwo verifies that two events from one transaction
 // are appended in the order they occurred.
 func Test_CDCCollator_CommitTwo(t *testing.T) {
-	np := &mockColumnNamesProvider{
-		columns: map[string][]string{"test_table": {"id", "name", "value"}},
-	}
-	c := mustNewCDCCollator(t, np)
+	conn := mustOpenCollatorConn(t, "CREATE TABLE test_table (id INTEGER PRIMARY KEY, name TEXT, value TEXT)")
+	c := NewCDCCollator()
 
 	c.Reset()
 	change1 := &command.CDCEvent{
@@ -96,7 +86,7 @@ func Test_CDCCollator_CommitTwo(t *testing.T) {
 		t.Fatal("c.Events() reached the caller before commit")
 	}
 
-	c.CommitHook()
+	c.CommitHook(conn)
 	if len(c.Events()) != 2 {
 		t.Fatalf("expected 2 c.Events(), got %d", len(c.Events()))
 	}
@@ -114,17 +104,15 @@ func Test_CDCCollator_CommitTwo(t *testing.T) {
 // Test_CDCCollator_MultipleCommits verifies that several transactions committed
 // after one Reset all accumulate and are returned together by Events.
 func Test_CDCCollator_MultipleCommits(t *testing.T) {
-	np := &mockColumnNamesProvider{
-		columns: map[string][]string{"foo": {"id"}},
-	}
-	c := mustNewCDCCollator(t, np)
+	conn := mustOpenCollatorConn(t, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+	c := NewCDCCollator()
 
 	c.Reset()
 	for i := int64(1); i <= 3; i++ {
 		if err := c.PreupdateHook(&command.CDCEvent{Table: "foo", Op: command.CDCEvent_INSERT, NewRowId: i}); err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		c.CommitHook()
+		c.CommitHook(conn)
 	}
 
 	if got := newRowIDs(c.Events()); !slices.Equal(got, []int64{1, 2, 3}) {
@@ -140,10 +128,11 @@ func Test_CDCCollator_MultipleCommits(t *testing.T) {
 // Test_CDCCollator_CommitNoEvents verifies that a commit with nothing pending,
 // as happens for schema changes, collects nothing.
 func Test_CDCCollator_CommitNoEvents(t *testing.T) {
-	c := mustNewCDCCollator(t, &mockColumnNamesProvider{})
+	conn := mustOpenCollatorConn(t, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+	c := NewCDCCollator()
 
 	c.Reset()
-	if !c.CommitHook() {
+	if !c.CommitHook(conn) {
 		t.Fatal("commit hook must always allow the transaction to proceed")
 	}
 	if c.Events() != nil {
@@ -155,10 +144,8 @@ func Test_CDCCollator_CommitNoEvents(t *testing.T) {
 // an unfinished transaction, so that only changes made after the Reset are
 // collected by a later commit.
 func Test_CDCCollator_ResetThenPreupdate(t *testing.T) {
-	np := &mockColumnNamesProvider{
-		columns: map[string][]string{"test_table": {"id", "name", "value"}},
-	}
-	c := mustNewCDCCollator(t, np)
+	conn := mustOpenCollatorConn(t, "CREATE TABLE test_table (id INTEGER PRIMARY KEY, name TEXT, value TEXT)")
+	c := NewCDCCollator()
 
 	c.Reset()
 	change1 := &command.CDCEvent{
@@ -181,7 +168,7 @@ func Test_CDCCollator_ResetThenPreupdate(t *testing.T) {
 	if err := c.PreupdateHook(change2); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	c.CommitHook()
+	c.CommitHook(conn)
 
 	events := c.Events()
 	if len(events) != 1 {
@@ -199,11 +186,12 @@ func Test_CDCCollator_ResetThenPreupdate(t *testing.T) {
 // already collected, and that a slice previously returned by Events is not
 // modified by the Reset or by later commits.
 func Test_CDCCollator_ResetDiscardsCollected(t *testing.T) {
-	c := mustNewCDCCollator(t, &mockColumnNamesProvider{})
+	conn := mustOpenCollatorConn(t, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+	c := NewCDCCollator()
 
 	c.Reset()
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 1})
-	c.CommitHook()
+	c.CommitHook(conn)
 	events1 := c.Events()
 	if got := newRowIDs(events1); !slices.Equal(got, []int64{1}) {
 		t.Fatalf("expected rows [1], got %v", got)
@@ -214,9 +202,9 @@ func Test_CDCCollator_ResetDiscardsCollected(t *testing.T) {
 		t.Fatalf("expected nil events after reset, got %d events", len(c.Events()))
 	}
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 2})
-	c.CommitHook()
+	c.CommitHook(conn)
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 3})
-	c.CommitHook()
+	c.CommitHook(conn)
 
 	if got := newRowIDs(events1); !slices.Equal(got, []int64{1}) {
 		t.Fatalf("previously returned slice was modified: rows %v", got)
@@ -230,19 +218,20 @@ func Test_CDCCollator_ResetDiscardsCollected(t *testing.T) {
 // only the events of the transaction in progress, leaving earlier commits in
 // place and allowing later commits to continue appending.
 func Test_CDCCollator_RollbackDiscardsPendingOnly(t *testing.T) {
-	c := mustNewCDCCollator(t, &mockColumnNamesProvider{})
+	conn := mustOpenCollatorConn(t, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+	c := NewCDCCollator()
 
 	c.Reset()
 
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 1})
-	c.CommitHook()
+	c.CommitHook(conn)
 
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 2})
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 3})
 	c.RollbackHook()
 
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 4})
-	c.CommitHook()
+	c.CommitHook(conn)
 
 	if got := newRowIDs(c.Events()); !slices.Equal(got, []int64{1, 4}) {
 		t.Fatalf("expected rows [1 4], got %v", got)
@@ -252,10 +241,11 @@ func Test_CDCCollator_RollbackDiscardsPendingOnly(t *testing.T) {
 // Test_CDCCollator_NoReset verifies that a collator which has never been
 // reset collects committed events and discards rolled-back ones.
 func Test_CDCCollator_NoReset(t *testing.T) {
-	c := mustNewCDCCollator(t, &mockColumnNamesProvider{})
+	conn := mustOpenCollatorConn(t, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+	c := NewCDCCollator()
 
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 1})
-	if !c.CommitHook() {
+	if !c.CommitHook(conn) {
 		t.Fatal("commit hook must always allow the transaction to proceed")
 	}
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 2})
@@ -269,11 +259,12 @@ func Test_CDCCollator_NoReset(t *testing.T) {
 // Test_CDCCollator_ColumnNamesError verifies that a failure to resolve column
 // names is recorded on the event, and that the event is still delivered.
 func Test_CDCCollator_ColumnNamesError(t *testing.T) {
-	c := mustNewCDCCollator(t, &errorColumnNamesProvider{err: errors.New("no such table")})
+	conn := mustOpenCollatorConn(t)
+	c := NewCDCCollator()
 
 	c.Reset()
 	c.PreupdateHook(&command.CDCEvent{Table: "missing", NewRowId: 1})
-	c.CommitHook()
+	c.CommitHook(conn)
 
 	if len(c.Events()) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(c.Events()))
@@ -291,21 +282,20 @@ func Test_CDCCollator_ColumnNamesError(t *testing.T) {
 // resolved at each commit, so a schema change between two transactions
 // collected together is reflected in the later events.
 func Test_CDCCollator_ColumnNamesPerCommit(t *testing.T) {
-	np := &mockColumnNamesProvider{
-		columns: map[string][]string{"foo": {"id"}},
-	}
-	c := mustNewCDCCollator(t, np)
+	conn := mustOpenCollatorConn(t, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+	c := NewCDCCollator()
 
 	c.Reset()
 
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 1})
-	c.CommitHook()
+	c.CommitHook(conn)
 
-	// Simulate ALTER TABLE foo ADD COLUMN name between the two transactions.
-	np.columns["foo"] = []string{"id", "name"}
+	if _, err := conn.Exec("ALTER TABLE foo ADD COLUMN name TEXT", nil); err != nil {
+		t.Fatalf("error altering table: %v", err)
+	}
 
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 2})
-	c.CommitHook()
+	c.CommitHook(conn)
 
 	if len(c.Events()) != 2 {
 		t.Fatalf("expected 2 c.Events(), got %d", len(c.Events()))
@@ -371,6 +361,39 @@ func Test_CDCCollator_Transaction(t *testing.T) {
 	}
 	if got := newRowIDs(c.Events()); !slices.Equal(got, []int64{1, 2}) {
 		t.Fatalf("expected rows [1 2], got %v", got)
+	}
+}
+
+// Test_CDCCollator_TableCreatedInTransaction verifies that the column names
+// of a table are resolved when the table is created by the same transaction
+// that fills it. At commit time the table is visible only on the connection
+// committing the transaction.
+func Test_CDCCollator_TableCreatedInTransaction(t *testing.T) {
+	db, c := mustCreateCDCCollatorDatabase(t)
+
+	c.Reset()
+	results, err := db.Execute(&command.Request{Transaction: true, Statements: []*command.Statement{
+		{Sql: "CREATE TABLE bar (id INTEGER PRIMARY KEY, name TEXT)"},
+		{Sql: "INSERT INTO bar(name) VALUES('fiona')"},
+	}}, false)
+	if err != nil {
+		t.Fatalf("error executing transaction: %v", err)
+	}
+	for _, r := range results {
+		if r.GetE().GetError() != "" {
+			t.Fatalf("unexpected statement error: %s", r.GetE().GetError())
+		}
+	}
+
+	events := c.Events()
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Error != "" {
+		t.Fatalf("unexpected event error: %q", events[0].Error)
+	}
+	if !slices.Equal(events[0].ColumnNames, []string{"id", "name"}) {
+		t.Fatalf("expected column names [id name], got %v", events[0].ColumnNames)
 	}
 }
 
@@ -582,14 +605,24 @@ func Test_CDCCollator_ConflictFailRetainsChanges(t *testing.T) {
 	}
 }
 
-// mustNewCDCCollator returns a collator or fails the test.
-func mustNewCDCCollator(t *testing.T, np ColumnsNameProvider) *CDCCollator {
+// mustOpenCollatorConn opens a database, runs the given statements on it, and
+// returns the raw connection. Tests which drive the collator's hooks by hand
+// pass it to CommitHook, which resolves column names through it.
+func mustOpenCollatorConn(t *testing.T, stmts ...string) *sqlite3.SQLiteConn {
 	t.Helper()
-	c, err := NewCDCCollator(np)
+	d := &sqlite3.SQLiteDriver{}
+	dc, err := d.Open(filepath.Join(t.TempDir(), "collator.db"))
 	if err != nil {
-		t.Fatalf("error creating CDCCollator: %v", err)
+		t.Fatalf("error opening connection: %v", err)
 	}
-	return c
+	conn := dc.(*sqlite3.SQLiteConn)
+	t.Cleanup(func() { conn.Close() })
+	for _, stmt := range stmts {
+		if _, err := conn.Exec(stmt, nil); err != nil {
+			t.Fatalf("error executing %q: %v", stmt, err)
+		}
+	}
+	return conn
 }
 
 // mustCreateCDCCollatorDatabase opens a WAL-mode database containing table
@@ -603,16 +636,12 @@ func mustCreateCDCCollatorDatabase(t *testing.T) (*DB, *CDCCollator) {
 	t.Cleanup(func() { db.Close() })
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
 
-	// The collator resolves column names through whichever database is
-	// currently open, since the database is reopened to install the hooks.
-	p := &lazyColumnNamesProvider{}
-	c := mustNewCDCCollator(t, p)
+	c := NewCDCCollator()
 	db = mustReopenWithHooks(t, db, &ConnConfig{
 		PreUpdateHook: c.PreupdateHook,
 		CommitHook:    c.CommitHook,
 		RollbackHook:  c.RollbackHook,
 	})
-	p.db = db
 	return db, c
 }
 
@@ -623,34 +652,4 @@ func newRowIDs(events []*command.CDCEvent) []int64 {
 		ids = append(ids, ev.NewRowId)
 	}
 	return ids
-}
-
-// errorColumnNamesProvider always fails to resolve column names.
-type errorColumnNamesProvider struct {
-	err error
-}
-
-func (p *errorColumnNamesProvider) ColumnNames(table string) ([]string, error) {
-	return nil, p.err
-}
-
-type mockColumnNamesProvider struct {
-	columns map[string][]string
-}
-
-func (m *mockColumnNamesProvider) ColumnNames(table string) ([]string, error) {
-	if cols, ok := m.columns[table]; ok {
-		return cols, nil
-	}
-	return []string{}, nil
-}
-
-// lazyColumnNamesProvider resolves column names through a database which may
-// be set after the provider is created.
-type lazyColumnNamesProvider struct {
-	db *DB
-}
-
-func (p *lazyColumnNamesProvider) ColumnNames(table string) ([]string, error) {
-	return p.db.ColumnNames(table)
 }

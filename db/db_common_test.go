@@ -1,14 +1,18 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand/v2"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,17 +22,28 @@ import (
 )
 
 func Test_DB_BusyTimeout(t *testing.T) {
+	// The driver default applies when no busy timeout is configured.
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer fsutil.Remove(path)
-	defer db.Close()
-
-	wantRw := rand.N(10000)
-	wantRo := rand.N(10000)
-
-	err := db.SetBusyTimeout(wantRw, wantRo)
+	rw, ro, err := db.BusyTimeout()
 	if err != nil {
-		t.Fatalf("failed to set busy_timeout: %s", err.Error())
+		t.Fatalf("failed to get busy_timeout: %s", err.Error())
 	}
+	if rw != 5000 || ro != 5000 {
+		t.Fatalf("want default busy_timeout rw=5000, ro=5000, got rw=%d, ro=%d", rw, ro)
+	}
+	db.Close()
+
+	wantRw := 1 + rand.N(10000)
+	wantRo := 1 + rand.N(10000)
+	cfg := NewConfig(ConnConfig{}, true)
+	cfg.Writer.BusyTimeout = time.Duration(wantRw) * time.Millisecond
+	cfg.Readers.BusyTimeout = time.Duration(wantRo) * time.Millisecond
+	db, err = OpenWithConfig(path, cfg)
+	if err != nil {
+		t.Fatalf("failed to open database: %s", err.Error())
+	}
+	defer db.Close()
 
 	gotRwOnly, err := db.RWBusyTimeout()
 	if err != nil {
@@ -56,6 +71,43 @@ func Test_DB_BusyTimeout(t *testing.T) {
 	}
 }
 
+// Test_DB_BusyTimeout_AllReaders tests that the read-only busy timeout reaches
+// every reader connection, including ones opened after the database was.
+func Test_DB_BusyTimeout_AllReaders(t *testing.T) {
+	const wantRo = 5678
+	cfg := NewConfig(ConnConfig{}, true)
+	cfg.Readers.BusyTimeout = wantRo * time.Millisecond
+	path := mustTempFile()
+	defer fsutil.Remove(path)
+	db, err := OpenWithConfig(path, cfg)
+	if err != nil {
+		t.Fatalf("failed to open database: %s", err.Error())
+	}
+	defer db.Close()
+
+	// Hold one reader so the second acquire must open a new connection.
+	r1, err := db.AcquireReader(context.Background())
+	if err != nil {
+		t.Fatalf("failed to acquire first reader: %s", err.Error())
+	}
+	defer r1.Close()
+	r2, err := db.AcquireReader(context.Background())
+	if err != nil {
+		t.Fatalf("failed to acquire second reader: %s", err.Error())
+	}
+	defer r2.Close()
+
+	for i, r := range []*Conn{r1, r2} {
+		got, err := r.BusyTimeout()
+		if err != nil {
+			t.Fatalf("failed to get busy_timeout on reader %d: %s", i+1, err.Error())
+		}
+		if got != wantRo {
+			t.Fatalf("reader %d: want busy_timeout=%d, got %d", i+1, wantRo, got)
+		}
+	}
+}
+
 // Test_DB_CompileOptions tests that we can fetch the compile options, and that the
 // underlying SQLite library is compiled as expected.
 func Test_DB_CompileOptions(t *testing.T) {
@@ -77,6 +129,33 @@ func Test_DB_CompileOptions(t *testing.T) {
 			t.Fatalf("%s not present in compile options", o)
 		}
 	}
+}
+
+// Test_DB_CompileOptions_Concurrent tests that the compile options can be
+// fetched by concurrent callers, as they are when the status of a node is
+// requested more than once at a time.
+func Test_DB_CompileOptions_Concurrent(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer fsutil.Remove(path)
+	defer db.Close()
+
+	// Make every caller read the options from the database.
+	compileOptions = nil
+
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			opts, err := db.CompileOptions()
+			if err != nil {
+				t.Errorf("failed to retrieve compilation options: %s", err.Error())
+			} else if len(opts) == 0 {
+				t.Error("no compile options returned")
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func Test_DB_SetSynchronousMode(t *testing.T) {
@@ -2535,6 +2614,52 @@ func Test_DB_Dump(t *testing.T) {
 	}
 }
 
+// Test_DumpQuotedIdentifiers tests dumping when a column name contains a double quote or
+// table name contains an apostrophe.
+func Test_DumpQuotedIdentifiers(t *testing.T) {
+	for _, tc := range []struct{ name, table, column string }{
+		{"column double quote", "items", `a"b`},
+		{"column single quote", "items", "a'b"},
+		{"table single quote", "a'b", "value"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src, err := Open(filepath.Join(t.TempDir(), "src.db"), false, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer src.Close()
+			ident := func(s string) string { return `"` + strings.ReplaceAll(s, `"`, `""`) + `"` }
+			mustExecute(src, fmt.Sprintf("CREATE TABLE %s (%s TEXT)", ident(tc.table), ident(tc.column)))
+			mustExecute(src, fmt.Sprintf("INSERT INTO %s VALUES ('saved value')", ident(tc.table)))
+			var dump bytes.Buffer
+			if _, err := src.Dump(&dump); err != nil {
+				t.Fatal(err)
+			}
+			dst, err := Open(filepath.Join(t.TempDir(), "dst.db"), false, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer dst.Close()
+			results, err := dst.ExecuteStringStmt(dump.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, result := range results {
+				if result.GetE().GetError() != "" {
+					t.Fatalf("restore: %s; dump: %s", result.GetE().GetError(), dump.String())
+				}
+			}
+			rows, err := dst.QueryStringStmt(fmt.Sprintf("SELECT %s FROM %s", ident(tc.column), ident(tc.table)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(rows) != 1 || rows[0].Error != "" || len(rows[0].Values) != 1 || rows[0].Values[0].Parameters[0].GetS() != "saved value" {
+				t.Fatalf("dump lost data: %v; dump: %s", rows, dump.String())
+			}
+		})
+	}
+}
+
 // Test_DB_DumpConcurrentWrite verifies that Dump reads schema and data from one
 // database snapshot when a write commits partway through the dump. Both tables
 // initially contain 0. During dumping, one transaction changes both values to 1
@@ -2796,6 +2921,43 @@ func Test_DB_DumpSelectedTables(t *testing.T) {
 	}
 	if s := asJSON(gotRows); s != expRows {
 		t.Fatalf("rows of a filtered dump: got %s want %s", s, expRows)
+	}
+}
+
+// Test_DB_DumpSelectedTables_Case tests that a table is selected for a dump
+// whatever the case its name is given in. SQLite treats table names in SQL
+// statements as case-insensitive, so "T1" refers to a table created as "t1",
+// and the dump must select tables the same way. Otherwise the dump carries the
+// table's indexes and triggers without the table, and cannot be loaded.
+func Test_DB_DumpSelectedTables_Case(t *testing.T) {
+	db, path := mustCreateDumpSchemaFixture(t)
+	defer fsutil.Remove(path)
+	defer db.Close()
+
+	var buf strings.Builder
+	if _, err := db.Dump(&buf, "T1"); err != nil {
+		t.Fatalf("dump T1: %s", err.Error())
+	}
+
+	newDB, newPath := mustCreateOnDiskDatabase()
+	defer fsutil.Remove(newPath)
+	defer newDB.Close()
+
+	resps, err := newDB.ExecuteStringStmt(buf.String())
+	if err != nil {
+		t.Fatalf("loading dump: %s", err.Error())
+	}
+	for _, r := range resps {
+		if r.GetE().GetError() != "" {
+			t.Fatalf("loading dump: %s", r.GetE().GetError())
+		}
+	}
+
+	expObjects := `[{"columns":["obj"],"types":["text"],"values":[["index:idx_t1_name"],["table:t1"],["trigger:trg_t1"],["view:v_t1_t2"]]}]`
+	rows := mustQuery(newDB, `SELECT "type" || ':' || "name" AS obj FROM "sqlite_master"
+							  WHERE "sql" NOT NULL AND "name" NOT LIKE 'sqlite_%' ORDER BY obj`)
+	if got := asJSON(rows); got != expObjects {
+		t.Fatalf("schema objects of a filtered dump:\ngot  %s\nwant %s", got, expObjects)
 	}
 }
 

@@ -1,12 +1,19 @@
 #!/usr/bin/env python
 
+import re
 import sys
+from pathlib import Path
+
 import requests
+
+CHANGELOG_PATH = Path(__file__).resolve().parents[2] / 'CHANGELOG.md'
 
 release_template = """
 _rqlite_ is a lightweight, user-friendly, distributed relational database, which uses [SQLite](https://www.sqlite.org/) as its storage engine. rqlite provides easy-to-use, fault-tolerant and highly-available storage for your most important data. You can learn a lot more about rqlite at [rqlite.io](https://www.rqlite.io).
 
-See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on {release}, and check out the _Assets_ section below for prebuilt binaries.
+Check out the _Assets_ section below for prebuilt binaries.
+
+{notes}
 
 ## Getting started
 _Check out the [Quick Start guide](https://rqlite.io/docs/quick-start/)._
@@ -65,6 +72,122 @@ You can download a pre-built release for Windows in one of two ways:
 - Download the Win64 [build artifact attached to this release](https://github.com/rqlite/rqlite/releases/download/{release}/rqlite-{release}-win64.zip).
 """
 
+notes_template = """## What's changed
+{changes}
+"""
+
+notes_fallback = """See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on {release}."""
+
+# Subsections collapsed on the release page. Anything else, such as new
+# features or upgrade notes, is shown inline.
+COLLAPSED_SUBSECTIONS = ('Implementation changes and bug fixes',)
+
+# Subsection whose absence is called out explicitly on the release page.
+FEATURES_SUBSECTION = 'New features'
+NO_FEATURES_TEXT = 'This release contains no new features.'
+
+def markdown_lines(text):
+    """Yield (line, is_heading_level) for each line of text.
+
+    is_heading_level is the number of leading '#' characters for a heading
+    outside a fenced code block, or 0 otherwise.
+    """
+    in_fence = False
+    for line in text.splitlines():
+        if line.lstrip().startswith(('```', '~~~')):
+            in_fence = not in_fence
+        m = None if in_fence else re.match(r'^(#+)\s+\S', line)
+        yield line, len(m.group(1)) if m else 0
+
+def changelog_section(text, tag):
+    """Return the body of the CHANGELOG section for tag, or None if absent.
+
+    A section starts at a level-2 heading whose first word is the tag,
+    e.g. '## v10.6.6 (October 28th 2026)', and ends at the next level-2
+    heading. Lines inside fenced code blocks are never treated as headings.
+    """
+    body, in_section = [], False
+    for line, level in markdown_lines(text):
+        if level == 2:
+            if in_section:
+                break
+            in_section = line.split()[1] == tag
+            continue
+        if in_section:
+            body.append(line)
+    if not in_section:
+        return None
+    section = '\n'.join(body).strip()
+    return section or None
+
+def split_subsections(section):
+    """Split a release section into its preamble and level-3 subsections.
+
+    Returns (preamble, [(title, body), ...]) where preamble is any text
+    before the first level-3 heading, and each body excludes its heading.
+    """
+    preamble, subsections = [], []
+    for line, level in markdown_lines(section):
+        if level == 3:
+            subsections.append((line.lstrip('#').strip(), []))
+        elif subsections:
+            subsections[-1][1].append(line)
+        else:
+            preamble.append(line)
+    return '\n'.join(preamble).strip(), [(t, '\n'.join(b).strip()) for t, b in subsections]
+
+def count_bullets(text):
+    return sum(1 for line in text.splitlines() if re.match(r'^\s*[-*+]\s', line))
+
+def render_changes(section):
+    """Render a release section for the release page.
+
+    The preamble and most subsections are shown as-is. The subsections named
+    in COLLAPSED_SUBSECTIONS, the long list of fixes, are placed in a
+    collapsed block so the release page stays short. A release without a
+    new-features subsection says so, rather than leaving the reader to infer
+    it from the absence of a heading.
+    """
+    preamble, subsections = split_subsections(section)
+    inline = [preamble] if preamble else []
+    collapsed = []
+    for title, body in subsections:
+        if title in COLLAPSED_SUBSECTIONS:
+            collapsed.append((title, body))
+        else:
+            inline.append(f'### {title}\n{body}')
+
+    if not any(title == FEATURES_SUBSECTION for title, _ in subsections):
+        inline.append(NO_FEATURES_TEXT)
+
+    if collapsed:
+        title = collapsed[0][0]
+        body = '\n'.join(b for _, b in collapsed)
+        n = count_bullets(body)
+        summary = f'{n} {title[0].lower() + title[1:]}' if n else title
+        inline.append(f'<details>\n<summary>{summary}</summary>\n\n{body}\n</details>')
+
+    return '\n\n'.join(inline)
+
+def release_notes(tag, changelog_path=CHANGELOG_PATH):
+    """Render the release body for tag.
+
+    The tag's CHANGELOG section is included when it can be found. Otherwise
+    the body just links to the CHANGELOG, so a missing or renamed section
+    never fails the release.
+    """
+    section = None
+    try:
+        section = changelog_section(changelog_path.read_text(encoding='utf-8'), tag)
+    except OSError as e:
+        print(f'warning: could not read {changelog_path}: {e}', file=sys.stderr)
+    if section is None:
+        print(f'warning: no CHANGELOG section found for {tag}', file=sys.stderr)
+        notes = notes_fallback.format(release=tag)
+    else:
+        notes = notes_template.format(changes=render_changes(section))
+    return release_template.format(release=tag, version=tag.lstrip('v'), notes=notes)
+
 def set_release_notes(token, release_id, notes):
     headers = {
         'Authorization': f'token {token}',
@@ -80,15 +203,19 @@ def set_release_notes(token, release_id, notes):
     return response.json()['id']
 
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == '--dry-run' and sys.argv[2]:
+        print(release_notes(sys.argv[2]))
+        return
+
     if len(sys.argv) != 4 or not all(sys.argv[1:]):
         print("Usage: python release-notes.py <GITHUB_TOKEN> <RELEASE ID> <TAG>")
+        print("       python release-notes.py --dry-run <TAG>")
         sys.exit(1)
 
     token = sys.argv[1]
     release_id = sys.argv[2]
     tag = sys.argv[3]
-    version = tag.lstrip('v')
-    set_release_notes(token, release_id, release_template.format(release=tag, version=version))
+    set_release_notes(token, release_id, release_notes(tag))
 
 if __name__ == "__main__":
     main()

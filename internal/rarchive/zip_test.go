@@ -103,6 +103,33 @@ func Test_UnzipToDir_InvalidZip(t *testing.T) {
 	}
 }
 
+// Test_UnzipToDir_NestedFileWithoutDirEntry checks that a file inside a
+// subdirectory extracts even when the archive carries no entry for the
+// directory itself, which is how archive/zip's Writer.Create lays files out.
+func Test_UnzipToDir_NestedFileWithoutDirEntry(t *testing.T) {
+	zipData, err := createZipInMemory(map[string]string{
+		"sub/dir/file1.txt": "This is file 1",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create ZIP file in memory: %v", err)
+	}
+	zipFileName := filepath.Join(t.TempDir(), "nested.zip")
+	mustWriteBytesToFile(zipFileName, zipData)
+
+	outputDir := t.TempDir()
+	if err := UnzipToDir(zipFileName, outputDir); err != nil {
+		t.Fatalf("UnzipToDir failed: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(outputDir, "sub", "dir", "file1.txt"))
+	if err != nil {
+		t.Fatalf("Failed to read unzipped file: %v", err)
+	}
+	if string(data) != "This is file 1" {
+		t.Fatalf("unexpected content: got %q", data)
+	}
+}
+
 func createZipInMemory(files map[string]string) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	zipWriter := zip.NewWriter(buf)

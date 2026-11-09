@@ -89,15 +89,20 @@ func NewCredentialsStoreFromFile(path string) (*CredentialsStore, error) {
 	return c, c.Load(f)
 }
 
-// Load loads credential information from a reader.
+// Load replaces all credentials and permissions with those read from r.
+// If validation fails, the existing credentials and permissions are left unchanged.
 func (c *CredentialsStore) Load(r io.Reader) error {
 	dec := json.NewDecoder(r)
 	// Read opening bracket.
-	_, err := dec.Token()
+	tok, err := dec.Token()
 	if err != nil {
 		return err
 	}
+	if tok != json.Delim('[') {
+		return fmt.Errorf("expected JSON array, got %v", tok)
+	}
 
+	pending := NewCredentialsStore()
 	for dec.More() {
 		var cred Credential
 		err := dec.Decode(&cred)
@@ -115,19 +120,29 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 		if len(cred.Perms) == 0 {
 			return fmt.Errorf("no permissions specified for username %s", cred.Username)
 		}
-		c.store[cred.Username] = cred.Password
-		c.perms[cred.Username] = make(map[string]bool, len(cred.Perms))
+		if _, ok := pending.store[cred.Username]; ok {
+			return fmt.Errorf("duplicate username %s", cred.Username)
+		}
+		pending.store[cred.Username] = cred.Password
+		pending.perms[cred.Username] = make(map[string]bool, len(cred.Perms))
 		for _, p := range cred.Perms {
-			c.perms[cred.Username][p] = true
+			pending.perms[cred.Username][p] = true
 		}
 	}
 
-	// Read closing bracket.
-	_, err = dec.Token()
-	if err != nil {
+	// Read closing bracket, after which there must be nothing else.
+	if _, err = dec.Token(); err != nil {
 		return err
 	}
+	if tok, err := dec.Token(); err != io.EOF {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("unexpected data after credentials array: %v", tok)
+	}
 
+	c.store = pending.store
+	c.perms = pending.perms
 	return nil
 }
 

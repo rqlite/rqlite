@@ -1,11 +1,45 @@
 package store
 
 import (
+	"reflect"
 	"sort"
 	"testing"
 
+	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/command/proto"
 )
+
+func Test_Servers_RaftServers(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		servers Servers
+		want    []raft.Server
+	}{
+		{name: "nil"},
+		{name: "empty", servers: Servers{}, want: []raft.Server{}},
+		{name: "nil entries", servers: Servers{nil}, want: []raft.Server{}},
+		{
+			name: "mixed suffrage",
+			servers: Servers{
+				NewServer("replica", "localhost:4002", false),
+				nil,
+				NewServer("voter", "localhost:4003", true),
+				{ID: "default", Addr: "localhost:4004"},
+			},
+			want: []raft.Server{
+				{ID: "replica", Address: "localhost:4002", Suffrage: raft.Nonvoter},
+				{ID: "voter", Address: "localhost:4003", Suffrage: raft.Voter},
+				{ID: "default", Address: "localhost:4004", Suffrage: raft.Voter},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.servers.RaftServers(); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("RaftServers() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
 
 func Test_Server_IsReadReplica(t *testing.T) {
 	testCases := []struct {

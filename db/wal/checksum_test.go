@@ -298,23 +298,31 @@ func Test_ScanErrors(t *testing.T) {
 	src := buildWAL(false, pageSize, frames)
 
 	tests := []struct {
-		name   string
-		mutate func(*[]byte)
-		fault  func(*faultReader)
-		start  int64
-		errMsg string // empty means the scan must succeed
-		empty  bool
+		name       string
+		mutate     func(*[]byte)
+		fault      func(*faultReader)
+		start      int64
+		errMsg     string // empty means the scan must succeed
+		empty      bool
+		wantFrames int  // survivors expected; -1 to skip the check
+		sameAsBase bool // output must match the unmutated scan
 	}{
-		{name: "seed seek fails", start: start, fault: func(f *faultReader) { f.seekAt = prevHdr }, errMsg: "seek to preceding frame"},
-		{name: "seed read fails", start: start, fault: func(f *faultReader) { f.failReadAt = prevHdr }, errMsg: "read preceding frame header"},
-		{name: "seed salt mismatch", start: start, mutate: func(b *[]byte) { binary.BigEndian.PutUint32((*b)[prevHdr+8:], 0xdeadbeef) }, errMsg: "different WAL"},
-		{name: "output ignores the preceding page", start: start, mutate: func(b *[]byte) { (*b)[prevHdr+WALFrameHeaderSize] ^= 0xff }},
-		{name: "start past the end", start: int64(len(frames) + 1), empty: true},
+		{name: "seed seek fails", wantFrames: -1, start: start, errMsg: "seek to preceding frame",
+			fault: func(f *faultReader) { f.seekAt = prevHdr }},
+		{name: "seed read fails", wantFrames: -1, start: start, errMsg: "read preceding frame header",
+			fault: func(f *faultReader) { f.failReadAt = prevHdr }},
+		{name: "seed salt mismatch", wantFrames: -1, start: start, errMsg: "different WAL",
+			mutate: func(b *[]byte) { binary.BigEndian.PutUint32((*b)[prevHdr+8:], 0xdeadbeef) }},
+		{name: "output ignores the preceding page", start: start, wantFrames: len(frames) - start, sameAsBase: true,
+			mutate: func(b *[]byte) { (*b)[prevHdr+WALFrameHeaderSize] ^= 0xff }},
+		{name: "start past the end", start: int64(len(frames) + 1), empty: true, wantFrames: 0},
 		{
-			name:   "open transaction",
-			start:  0,
-			mutate: func(b *[]byte) { binary.BigEndian.PutUint32((*b)[WALHeaderSize+(len(frames)-1)*frameSize+4:], 0) },
-			errMsg: ErrOpenTransaction.Error(),
+			// A frame after the last commit is not part of the database: it is
+			// dropped rather than reported as an error, matching SQLite.
+			name:       "trailing uncommitted frame",
+			start:      0,
+			wantFrames: len(frames) - 1,
+			mutate:     func(b *[]byte) { binary.BigEndian.PutUint32((*b)[WALHeaderSize+(len(frames)-1)*frameSize+4:], 0) },
 		},
 	}
 
@@ -330,22 +338,31 @@ func Test_ScanErrors(t *testing.T) {
 			}
 
 			s, err := NewCompactingFrameScanner(fs, tc.start, false)
-			if tc.errMsg == "" {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if s.Empty() != tc.empty {
-					t.Fatalf("empty = %t, want %t", s.Empty(), tc.empty)
-				}
-				// The seed comes from the frame header, so changing the page
-				// data of the preceding frame must not change the output.
-				if !bytes.Equal(compact(t, b, tc.start, false), compact(t, src, tc.start, false)) {
-					t.Fatal("output changed when only the preceding page data changed")
+			if tc.errMsg != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.errMsg) {
+					t.Fatalf("error = %v, want it to contain %q", err, tc.errMsg)
 				}
 				return
 			}
-			if err == nil || !strings.Contains(err.Error(), tc.errMsg) {
-				t.Fatalf("error = %v, want it to contain %q", err, tc.errMsg)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if s.Empty() != tc.empty {
+				t.Fatalf("empty = %t, want %t", s.Empty(), tc.empty)
+			}
+
+			got := compact(t, b, tc.start, false)
+			if tc.sameAsBase {
+				// The seed comes from the frame header, so changing the page
+				// data of the preceding frame must not change the output.
+				if !bytes.Equal(got, compact(t, src, tc.start, false)) {
+					t.Fatal("output changed when only the preceding page data changed")
+				}
+			}
+			if tc.wantFrames >= 0 {
+				if n := checkWAL(t, got); n != tc.wantFrames {
+					t.Fatalf("output has %d frames, want %d", n, tc.wantFrames)
+				}
 			}
 		})
 	}

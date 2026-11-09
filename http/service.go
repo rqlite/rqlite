@@ -3,6 +3,7 @@ package http
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -902,9 +903,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 	}
 
 	resp := NewResponse()
-	defer func() {
-		resp.end = time.Now()
-	}()
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -946,6 +944,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		}
 	}
 
+	resp.end = time.Now()
 	s.writeResponse(w, qp, resp)
 }
 
@@ -1282,7 +1281,12 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 			ID string `json:"id"`
 		}
 		if r.Body != nil {
-			if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil {
+			dec := json.NewDecoder(r.Body)
+			if err := dec.Decode(&reqBody); err == nil {
+				if _, err := dec.Token(); err != io.EOF {
+					http.Error(w, "invalid JSON: unexpected data after request", http.StatusBadRequest)
+					return
+				}
 				nodeID = reqBody.ID
 			} else {
 				if err != io.EOF {
@@ -1477,8 +1481,8 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 
 	stmts, err := ParseRequest(r.Body)
 	if err != nil {
-		if (errors.Is(err, ErrNoStatements) || errors.Is(err, ErrInvalidRequest)) && qp.Wait() {
-			// These errors are OK if waiting.
+		if errors.Is(err, ErrNoStatements) && qp.Wait() {
+			// An empty statement list is OK when only waiting for the queue.
 			err = nil
 		} else {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -2088,8 +2092,13 @@ func getSubJSON(jsonBlob []byte, keyString string) (json.RawMessage, error) {
 
 	keys := strings.Split(keyString, ".")
 	var obj any
-	if err := json.Unmarshal(jsonBlob, &obj); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(jsonBlob))
+	dec.UseNumber()
+	if err := dec.Decode(&obj); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal json: %w", err)
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, fmt.Errorf("unexpected data after JSON value")
 	}
 
 	for _, key := range keys {

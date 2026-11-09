@@ -572,7 +572,12 @@ func (s *Store) Open() (retErr error) {
 	s.raftTn = NewNodeTransport(nt, s.CompressSnapTransport)
 
 	// Don't allow control over trailing logs directly, just implement a policy.
+	// With no snapshot threshold set, Raft runs with its own default, and that
+	// is the value Snapshot() must restore afterwards.
 	s.numTrailingLogs = uint64(float64(s.SnapshotThreshold) * trailingScale)
+	if s.SnapshotThreshold == 0 {
+		s.numTrailingLogs = raft.DefaultConfig().TrailingLogs
+	}
 
 	raftConfig := s.raftConfig()
 
@@ -788,10 +793,7 @@ func (s *Store) Open() (retErr error) {
 	}, true)
 	s.dbCfg.MaxReaders = s.MaxReadOnlyConns
 	if s.cdcConf != nil {
-		s.cdcCollator, err = sql.NewCDCCollator(&ColumnNamesProvider{s})
-		if err != nil {
-			return fmt.Errorf("failed to create CDC collator: %s", err)
-		}
+		s.cdcCollator = sql.NewCDCCollator()
 		s.dbCfg.Writer.PreUpdateHook = s.cdcCollator.PreupdateHook
 		s.dbCfg.Writer.PreUpdateTableRe = s.cdcConf.TableRe
 		s.dbCfg.Writer.PreUpdateRowIDsOnly = s.cdcConf.RowIDsOnly
@@ -875,15 +877,8 @@ func (s *Store) Open() (retErr error) {
 // Bootstrap executes a cluster bootstrap on this node, using the given
 // Servers as the configuration.
 func (s *Store) Bootstrap(servers ...*Server) error {
-	raftServers := make([]raft.Server, len(servers))
-	for i := range servers {
-		raftServers[i] = raft.Server{
-			ID:      raft.ServerID(servers[i].ID),
-			Address: raft.ServerAddress(servers[i].Addr),
-		}
-	}
 	fut := s.raft.BootstrapCluster(raft.Configuration{
-		Servers: raftServers,
+		Servers: Servers(servers).RaftServers(),
 	})
 	return fut.Error()
 }
@@ -1404,7 +1399,7 @@ func (s *Store) Stats() (map[string]any, error) {
 	}
 
 	status := map[string]any{
-		"open":             s.open,
+		"open":             s.open.Is(),
 		"node_id":          s.raftID,
 		"raft":             raftStats,
 		"fsm_index":        s.fsmIdx.Load(),
@@ -1667,7 +1662,7 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 		err := s.waitForLinearizableRead(readTerm, eqr.LinearizableTimeout)
 		if err != nil {
 			if err == ErrStrongReadNeeded {
-				eqr.Level = proto.ConsistencyLevel_STRONG
+				level = proto.ConsistencyLevel_STRONG
 				s.numLRUpgraded.Add(1)
 			} else {
 				return nil, 0, 0, err
@@ -1675,7 +1670,7 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 		}
 	}
 
-	if nRW == 0 && eqr.Level != proto.ConsistencyLevel_STRONG {
+	if nRW == 0 && level != proto.ConsistencyLevel_STRONG {
 		// It's a little faster just to do a Query of the DB if we know there is no need
 		// for consensus.
 		convertFn := func(qr []*proto.QueryRows) []*proto.ExecuteQueryResponse {
@@ -1688,9 +1683,9 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 			return resp
 		}
 
-		if eqr.Level == proto.ConsistencyLevel_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
+		if level == proto.ConsistencyLevel_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
 			return nil, 0, 0, ErrStaleRead
-		} else if eqr.Level == proto.ConsistencyLevel_WEAK {
+		} else if level == proto.ConsistencyLevel_WEAK {
 			if !isLeader {
 				return nil, 0, 0, ErrNotLeader
 			}
@@ -2124,13 +2119,11 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 	s.logger.Printf("reached expected bootstrap count of %d, starting cluster bootstrap",
 		s.BootstrapExpect)
 
-	raftServers := make([]raft.Server, 0, len(s.notifyingNodes))
+	servers := make(Servers, 0, len(s.notifyingNodes))
 	for _, n := range s.notifyingNodes {
-		raftServers = append(raftServers, raft.Server{
-			ID:      raft.ServerID(n.ID),
-			Address: raft.ServerAddress(n.Addr),
-		})
+		servers = append(servers, n)
 	}
+	raftServers := servers.RaftServers()
 	bf := s.raft.BootstrapCluster(raft.Configuration{
 		Servers: raftServers,
 	})
@@ -2622,7 +2615,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}
 
 	syncStartTime := time.Now()
-	if _, _, err := s.snapshotSync.Sync(time.Second); err != nil {
+	if _, _, _, err := s.snapshotSync.Sync(time.Second); err != nil {
 		return nil, err
 	}
 	recordDuration(snapshotSyncDuration, syncStartTime)

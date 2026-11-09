@@ -3,7 +3,6 @@ package wal
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"expvar"
 	"fmt"
 	"io"
@@ -11,11 +10,6 @@ import (
 	"math"
 	"sort"
 	"time"
-)
-
-var (
-	// ErrOpenTransaction is returned when the final frame in the WAL file is not a committing frame.
-	ErrOpenTransaction = errors.New("open transaction at end of WAL file")
 )
 
 // CompactingFrameScanner implements WALIterator to iterate over compacted WAL
@@ -64,7 +58,10 @@ type CompactingFrameScanner struct {
 // faster for large WAL files, since it avoids reading the page data for each frame.
 //
 // Scanning stops at the first invalid frame (e.g. salt mismatch, checksum failure if
-// applicable, or partial read).
+// applicable, or partial read). Frames after the last commit frame are not part of
+// the database and are dropped. They are left in the WAL by a transaction that was
+// rolled back, or by one that was in progress when the process stopped, and SQLite
+// ignores them too.
 func NewCompactingFrameScanner(r io.ReadSeeker, startFrame int64, fullScan bool) (*CompactingFrameScanner, error) {
 	walReader := NewReader(r)
 	if err := walReader.ReadHeader(); err != nil {
@@ -200,7 +197,6 @@ func (s *CompactingFrameScanner) scan() (int64, error) {
 	}
 
 	var framesInput int64
-	waitingForCommit := false
 	txFrames := make(map[uint32]*cFrame)
 	frames := make(map[uint32]*cFrame)
 	for {
@@ -224,23 +220,22 @@ func (s *CompactingFrameScanner) scan() (int64, error) {
 		prev = s.walReader.frameChecksum()
 
 		if commit == 0 {
-			waitingForCommit = true
 			continue
 		}
-		waitingForCommit = false
-
 		maps.Copy(frames, txFrames)
 		clear(txFrames)
 	}
 	stats.Get(compactFramesInput).(*expvar.Int).Set(framesInput)
 
-	if waitingForCommit {
-		return framesInput, ErrOpenTransaction
-	}
 	if framesInput > 0 && seedErr != nil {
 		return 0, seedErr
 	}
 
+	// Any frames still in txFrames follow the last commit frame. They were
+	// written by a transaction that was rolled back, or by one that was in
+	// progress when the process stopped, and SQLite ignores them until later
+	// transactions overwrite them. They are not part of the database, so they
+	// are dropped here too.
 	s.frames = make(cFrames, 0, len(frames))
 	for _, frame := range frames {
 		s.frames = append(s.frames, frame)
