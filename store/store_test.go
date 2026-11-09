@@ -76,6 +76,9 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+	if !fsutil.FileExists(filepath.Join(filepath.Dir(s.peersPath), recoveryREADMEName)) {
+		t.Fatalf("recovery README not written on open")
+	}
 	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
 		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}

@@ -6,6 +6,7 @@ This release provides more options for securing backups in the Cloud, upgrades S
 - [PR #3005](https://github.com/rqlite/rqlite/pull/3005): Support CMEK for automatic backups to Google Cloud Storage.
 
 ### Implementation changes and bug fixes
+- [PR #3034](https://github.com/rqlite/rqlite/pull/3034): Add README explaining purpose of `raft/` directory.
 - [PR #3014](https://github.com/rqlite/rqlite/pull/3014): Preserve table data in SQL dumps when table names contain single quotes or column names contain double quotes.
 - [PR #3031](https://github.com/rqlite/rqlite/pull/3031): Move automatic backup retries from the Store provider to the uploader.
 - [PR #3022](https://github.com/rqlite/rqlite/pull/3022): Replace credentials and permissions only after validating the complete auth configuration, leaving the store unchanged on failure.

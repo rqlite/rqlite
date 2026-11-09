@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -166,6 +167,39 @@ func HasData(dir string) (bool, error) {
 		return false, err
 	}
 	return h, nil
+}
+
+// recoveryREADMEName is the name of the file written to the directory which
+// holds the peers file, explaining to operators why the directory exists.
+const recoveryREADMEName = "README"
+
+const recoveryREADME = `This directory is used to recover a cluster that has lost quorum.
+
+At startup rqlite checks this directory for a file named peers.json and, if
+present, uses it to force a new cluster configuration. After a successful
+recovery the file is renamed to peers.info. Unless you are recovering a
+cluster this directory will be otherwise empty, and can be ignored.
+
+For the full recovery procedure see:
+https://rqlite.io/docs/clustering/general-guidelines/#dealing-with-failure
+`
+
+// writeRecoveryREADME writes a README to dir, the directory in which the peers
+// file is placed during cluster recovery. If the README already exists it is
+// left untouched.
+func writeRecoveryREADME(dir string) error {
+	f, err := os.OpenFile(filepath.Join(dir, recoveryREADMEName), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil
+		}
+		return err
+	}
+	if _, err := f.WriteString(recoveryREADME); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // RecoverNode is used to manually force a new configuration, in the event that
