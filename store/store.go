@@ -124,8 +124,8 @@ const (
 	restoreScratchPattern  = "rqlite-restore-*"
 	bootScratchPattern     = "rqlite-boot-*"
 	backupScratchPattern   = "rqlite-backup-*"
-	raftDBPath             = "raft.db" // Changing this will break backwards compatibility.
-	peersPath              = "raft/peers.json"
+	raftDBPath             = "raft.db"         // Changing this will break backwards compatibility.
+	peersPath              = "raft/peers.json" // The "raft" directory exists only to hold the peers file during cluster recovery.
 	peersInfoPath          = "raft/peers.info"
 	applyTimeout           = 10 * time.Second
 	sqliteFile             = "db.sqlite"
@@ -542,13 +542,18 @@ func (s *Store) Open() (retErr error) {
 	// Clean up a never-used file from previous releases.
 	fsutil.Remove(filepath.Join(s.raftDir, "applied_index"))
 
-	// Create all the required Raft directories.
+	// Create the data directory, and the directory in which an operator places
+	// the peers file when recovering a cluster.
 	s.logger.Printf("ensuring data directory exists at %s", s.raftDir)
 	if err := os.MkdirAll(s.raftDir, 0755); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(s.peersPath), 0755); err != nil {
+	peersDir := filepath.Dir(s.peersPath)
+	if err := os.MkdirAll(peersDir, 0755); err != nil {
 		return err
+	}
+	if err := writeRecoveryREADME(peersDir); err != nil {
+		s.logger.Printf("failed to write README to %s: %s", peersDir, err.Error())
 	}
 	decMgmr, err := chunking.NewDechunkerManager(filepath.Dir(s.dbPath))
 	if err != nil {
