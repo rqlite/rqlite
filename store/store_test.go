@@ -76,9 +76,6 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	if !fsutil.FileExists(filepath.Join(filepath.Dir(s.peersPath), recoveryREADMEName)) {
-		t.Fatalf("recovery README not written on open")
-	}
 	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
 		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
@@ -123,6 +120,43 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 
 	if !s.IsStandalone() {
 		t.Fatalf("store not marked as standalone")
+	}
+}
+
+// Test_OpenStoreRecoveryREADME tests that the README explaining the purpose
+// of the peers directory is written when the Store is opened, and is written
+// again on the next open if it has been removed.
+func Test_OpenStoreRecoveryREADME(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	readmePath := filepath.Join(filepath.Dir(s.peersPath), recoveryREADMEName)
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if !fsutil.FileExists(readmePath) {
+		t.Fatalf("recovery README does not exist at %s after open", readmePath)
+	}
+	if got, exp := string(mustReadFile(readmePath)), recoveryREADME; got != exp {
+		t.Fatalf("recovery README has wrong contents, got: %s, exp: %s", got, exp)
+	}
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	if err := fsutil.Remove(readmePath); err != nil {
+		t.Fatalf("failed to remove recovery README: %s", err.Error())
+	}
+	if fsutil.FileExists(readmePath) {
+		t.Fatalf("recovery README still exists at %s after removal", readmePath)
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to reopen single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if !fsutil.FileExists(readmePath) {
+		t.Fatalf("recovery README does not exist at %s after reopen", readmePath)
 	}
 }
 
