@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -370,6 +371,53 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	}
 	if !fsutil.PathExists(peersInfo) {
 		t.Fatalf("Peers info does not exist at %s", peersInfo)
+	}
+}
+
+// Test_SingleNodeRecoverOpenTransaction tests a node recovery when the Raft
+// log ends with a transaction still open, because an explicit BEGIN was never
+// followed by COMMIT or ROLLBACK. Using rqlite this way is not officially
+// supported. Recovery must fail with an error which says why, and must leave
+// the peers file in place.
+func Test_SingleNodeRecoverOpenTransaction(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	s.NoSnapshotOnClose = true
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`BEGIN`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	if _, _, err := s.Execute(context.Background(), er); err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	id, addr := s.ID(), s.Addr()
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	peersPath := filepath.Join(s.Path(), "/raft/peers.json")
+	mustWriteFile(peersPath, fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, id, addr))
+	err := s.Open()
+	if err == nil {
+		s.Close(true)
+		t.Fatal("expected recovery to fail with a transaction open at the end of the Raft log")
+	}
+	if !strings.Contains(err.Error(), ErrRecoverOpenTransaction.Error()) {
+		t.Fatalf("expected recovery to fail due to the open transaction, got %s", err)
+	}
+	if !fsutil.PathExists(peersPath) {
+		t.Fatalf("expected Peers JSON to still exist at %s", peersPath)
 	}
 }
 

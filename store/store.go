@@ -118,7 +118,21 @@ var (
 	// ErrSnapshotOpenTransaction is returned when a snapshot is requested while a
 	// transaction is open on the database. A snapshot does not record that a
 	// transaction is open, so none can be taken until the transaction ends.
+	//
+	// rqlite does not support explicit BEGIN, and a transaction is only left
+	// open by a client which sends one anyway. This error does not make that
+	// supported. It is a guard, so that a client which misuses rqlite this way
+	// gets an error which says what is wrong, and does not lose data.
 	ErrSnapshotOpenTransaction = errors.New("snapshot blocked by open transaction")
+
+	// ErrRecoverOpenTransaction is returned when a node recovery finds that the
+	// Raft log ends with a transaction still open. Recovery snapshots the
+	// database once the log has been replayed, and that cannot be done while a
+	// transaction is open.
+	//
+	// As with ErrSnapshotOpenTransaction, this is a guard against a client
+	// sending an explicit BEGIN, which rqlite does not support.
+	ErrRecoverOpenTransaction = errors.New("Raft log ends inside an open transaction")
 )
 
 const (
@@ -2639,6 +2653,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	// would hold only what was committed before it, and a node restored from it
 	// would not have the transaction open, so the statements already run inside
 	// the transaction would be lost.
+	//
+	// rqlite does not support explicit BEGIN, and a transaction is only left
+	// open by a client which sends one anyway. This check does not make that
+	// supported. It is a guard against that misuse.
 	if inTx, err := s.db.InTransaction(); err != nil {
 		return nil, fmt.Errorf("failed to check for open transaction before snapshot: %w", err)
 	} else if inTx {

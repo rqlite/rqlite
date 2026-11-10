@@ -303,6 +303,17 @@ func RecoverNode(dataDir string, dbConf *DBConfig, logger *log.Logger, logs raft
 		logger.Printf("last index is now %d, last term is %d", lastIndex, lastTerm)
 	}
 
+	// The replayed log may end with a transaction still open, if a client sent
+	// an explicit BEGIN which was never followed by COMMIT or ROLLBACK. rqlite
+	// does not support explicit BEGIN, and this check does not make it
+	// supported. The database cannot be snapshotted in that state, so fail with
+	// an error which says what is wrong.
+	if inTx, err := db.InTransaction(); err != nil {
+		return fmt.Errorf("failed to check for open transaction: %s", err)
+	} else if inTx {
+		return ErrRecoverOpenTransaction
+	}
+
 	// Create a new snapshot, placing the configuration in as if it was
 	// committed at index 1.
 	_, _, err = db.Checkpoint(nil, truncateTimeout)
