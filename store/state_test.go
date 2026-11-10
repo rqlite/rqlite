@@ -410,6 +410,13 @@ func Test_SingleNodeRecoverOpenTransaction(t *testing.T) {
 		s.Close(true)
 		t.Fatal("expected recovery to fail with a transaction open at the end of the Raft log")
 	}
+
+	// A failed Open leaves the Store marked as not open, so Close does nothing.
+	// Release what Open acquired before it failed, or the files stay open and
+	// cannot be removed when the test ends.
+	defer s.dechunkManager.Close()
+	defer s.snapshotStore.Close()
+	defer s.boltStore.Close()
 	if !fsutil.PathExists(peersPath) {
 		t.Fatalf("expected Peers JSON to still exist at %s", peersPath)
 	}
