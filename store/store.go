@@ -114,6 +114,11 @@ var (
 	// WAL data to snapshot. This can happen when the Raft log contains only entries
 	// that don't modify the database (e.g. cluster membership changes).
 	ErrNoWALToSnapshot = errors.New("no WAL data available for snapshot")
+
+	// ErrSnapshotOpenTransaction is returned when a snapshot is requested while a
+	// transaction is open on the database. A snapshot does not record that a
+	// transaction is open, so none can be taken until the transaction ends.
+	ErrSnapshotOpenTransaction = errors.New("snapshot blocked by open transaction")
 )
 
 const (
@@ -2629,6 +2634,17 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		return nil, err
 	}
 	defer s.snapshotCAS.End()
+
+	// A snapshot must not be taken while a transaction is open. The snapshot
+	// would hold only what was committed before it, and a node restored from it
+	// would not have the transaction open, so the statements already run inside
+	// the transaction would be lost.
+	if inTx, err := s.db.InTransaction(); err != nil {
+		return nil, fmt.Errorf("failed to check for open transaction before snapshot: %w", err)
+	} else if inTx {
+		stats.Add(numSnapshotsFailed, 1)
+		return nil, ErrSnapshotOpenTransaction
+	}
 
 	// We want to guarantee that any snapshot results in a fully-sync'ed to disk
 	// SQLite database. This allows us to assume that the database file on disk is

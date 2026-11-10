@@ -182,6 +182,13 @@ func (s *SwappableDB) Optimize() error {
 	return s.db.Optimize()
 }
 
+// InTransaction calls InTransaction on the underlying database.
+func (s *SwappableDB) InTransaction() (bool, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.InTransaction()
+}
+
 // SetSynchronousMode calls SetSynchronousMode on the underlying database.
 func (s *SwappableDB) SetSynchronousMode(mode SynchronousMode) error {
 	s.dbMu.RLock()

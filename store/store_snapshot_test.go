@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -998,9 +999,16 @@ func Test_SingleNodeSnapshot_ExplicitTransaction(t *testing.T) {
 
 	// Every snapshot attempt must fail while the transaction is open.
 	for i := range 2 {
-		if err := s.Snapshot(0); err == nil {
+		err := s.Snapshot(0)
+		if err == nil {
 			t.Fatalf("expected snapshot attempt %d to fail with a transaction open", i)
 		}
+		if !strings.Contains(err.Error(), ErrSnapshotOpenTransaction.Error()) {
+			t.Fatalf("expected snapshot attempt %d to fail due to the open transaction, got %s", i, err)
+		}
+	}
+	if _, err := NewFSM(s).Snapshot(); err != ErrSnapshotOpenTransaction {
+		t.Fatalf("expected ErrSnapshotOpenTransaction from the FSM, got %v", err)
 	}
 
 	// Once the transaction commits, the snapshot must succeed.

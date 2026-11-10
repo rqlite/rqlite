@@ -937,6 +937,9 @@ func Test_CheckpointManager_Checkpoint_OpenTransactionOnWriter(t *testing.T) {
 	mustExecute(db, `INSERT INTO foo(name) VALUES('fiona')`)
 	mustExecute(db, "BEGIN")
 	mustExecute(db, `INSERT INTO foo(name) VALUES('declan')`)
+	if inTx, err := db.InTransaction(); err != nil || !inTx {
+		t.Fatalf("expected a transaction to be reported open, got %t, err=%v", inTx, err)
+	}
 	walSz := mustFileSize(db.WALPath())
 
 	// The checkpoint must fail. The error must not be one which reports itself
@@ -963,6 +966,9 @@ func Test_CheckpointManager_Checkpoint_OpenTransactionOnWriter(t *testing.T) {
 	// Commit the transaction. The next checkpoint must succeed, and its
 	// compacted WAL must carry both rows.
 	mustExecute(db, "COMMIT")
+	if inTx, err := db.InTransaction(); err != nil || inTx {
+		t.Fatalf("expected no transaction to be reported open, got %t, err=%v", inTx, err)
+	}
 	buf.Reset()
 	meta, n, err := cm.Checkpoint(&buf, 5*time.Second)
 	if err != nil {
