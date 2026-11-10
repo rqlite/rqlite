@@ -799,3 +799,107 @@ func Test_CheckpointManager_Checkpoint_RolledBackFrames_Resume(t *testing.T) {
 		t.Fatalf("unexpected rows after replay: got %s, want %s", got, exp)
 	}
 }
+
+// Test_CheckpointManager_Checkpoint_OpenTransactionCommits tests that frames
+// a checkpoint ignored, because their transaction was still open, are carried
+// by the next checkpoint once that transaction commits. A second connection
+// holds the transaction, since a checkpoint cannot run on the connection with
+// the open transaction. Replaying both compacted WALs must give every row.
+func Test_CheckpointManager_Checkpoint_OpenTransactionCommits(t *testing.T) {
+	path := mustTempFile()
+	defer RemoveFiles(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+	mustExecute(db, `CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+
+	// Checkpoint the table creation, and keep a copy of the database as it
+	// stands now to replay the compacted WALs against later.
+	cm, err := NewCheckpointManager(db)
+	if err != nil {
+		t.Fatalf("failed to create checkpoint manager: %s", err.Error())
+	}
+	if _, _, err := cm.Checkpoint(nil, 5*time.Second); err != nil {
+		t.Fatalf("failed to checkpoint: %s", err.Error())
+	}
+	base := mustTempFile()
+	defer RemoveFiles(base)
+	mustCopyFile(base, path)
+	mustExecute(db, `INSERT INTO foo(name) VALUES('fiona')`)
+
+	// Open a transaction on a second connection and insert 1000 rows. The
+	// PRAGMA makes SQLite write the transaction's frames to the WAL before it
+	// commits, so they follow the last commit frame.
+	txDB, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open second database connection: %s", err.Error())
+	}
+	defer txDB.Close()
+	mustExecute(txDB, "PRAGMA cache_size=5")
+	mustExecute(txDB, "BEGIN")
+	stmts := make([]*command.Statement, 0, 1000)
+	for i := range 1000 {
+		stmts = append(stmts, &command.Statement{Sql: fmt.Sprintf("INSERT INTO foo(name) VALUES('%0500d')", i)})
+	}
+	if _, err := txDB.Execute(&command.Request{Statements: stmts}, false); err != nil {
+		t.Fatalf("failed to execute inside transaction: %s", err.Error())
+	}
+	const frameSize = wal.WALFrameHeaderSize + 4096
+	if sz := mustFileSize(db.WALPath()); sz <= wal.WALHeaderSize+frameSize {
+		t.Fatalf("expected the open transaction to have written frames to the WAL, WAL is %d bytes", sz)
+	}
+
+	// The open transaction blocks truncation. The checkpoint must carry only
+	// the frame of the committed row, and resume at the frame after it.
+	var bufA bytes.Buffer
+	meta, _, err := cm.Checkpoint(&bufA, 100*time.Millisecond)
+	if err != nil {
+		t.Fatalf("failed to checkpoint with a transaction open: %s", err.Error())
+	}
+	if meta.Success() || meta.Moved != meta.Pages {
+		t.Fatalf("expected a checkpoint which moved every page but did not truncate, got meta=%s", meta)
+	}
+	if bufA.Len() != wal.WALHeaderSize+frameSize {
+		t.Fatalf("expected a compacted WAL with one frame, got %d bytes", bufA.Len())
+	}
+	if cm.resetWatch.resumeFrameIdx != 1 {
+		t.Fatalf("expected the checkpoint manager to resume at frame 1, got %d", cm.resetWatch.resumeFrameIdx)
+	}
+
+	// Commit the transaction. The next checkpoint must carry its frames and
+	// truncate the WAL.
+	mustExecute(txDB, "COMMIT")
+	var bufB bytes.Buffer
+	meta, _, err = cm.Checkpoint(&bufB, 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to checkpoint after COMMIT: %s", err.Error())
+	}
+	if !meta.Success() {
+		t.Fatalf("expected checkpoint to succeed, got meta=%s", meta)
+	}
+
+	// Replay the two compacted WALs against the copy, which must then hold
+	// every row.
+	walA, walB := base+"-a", base+"-b"
+	if err := os.WriteFile(walA, bufA.Bytes(), 0644); err != nil {
+		t.Fatalf("failed to write compacted WAL: %s", err.Error())
+	}
+	if err := os.WriteFile(walB, bufB.Bytes(), 0644); err != nil {
+		t.Fatalf("failed to write compacted WAL: %s", err.Error())
+	}
+	if err := ReplayWAL(base, []string{walA, walB}, false); err != nil {
+		t.Fatalf("failed to replay compacted WALs: %s", err.Error())
+	}
+	replayed, err := Open(base, false, true)
+	if err != nil {
+		t.Fatalf("failed to open replayed database: %s", err.Error())
+	}
+	defer replayed.Close()
+	rows := mustQuery(replayed, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1001]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected rows after replay: got %s, want %s", got, exp)
+	}
+}

@@ -956,6 +956,79 @@ func (m *mockSnapshotStreamer) Term() uint64 {
 	return 1
 }
 
+// Test_SingleNodeSnapshot_ExplicitTransaction tests snapshotting while a
+// transaction started by an explicit BEGIN is open. A snapshot must fail
+// until the transaction ends, and the snapshot taken after COMMIT must
+// contain the rows written inside the transaction. The node is restored
+// from that snapshot to check what it contains.
+func Test_SingleNodeSnapshot_ExplicitTransaction(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.NoSnapshotOnClose = true
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Take the first snapshot, which is full, so that the snapshots which
+	// follow are built from the WAL.
+	mustExecute(t, s, []string{`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`})
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to take first snapshot: %s", err)
+	}
+
+	// Commit one row, then open a transaction and write to it.
+	mustExecute(t, s, []string{`INSERT INTO foo(name) VALUES("fiona")`})
+	mustExecute(t, s, []string{`BEGIN`})
+	queries := make([]string, 0, 1000)
+	for range 1000 {
+		queries = append(queries, `INSERT INTO foo(name) VALUES("fiona")`)
+	}
+	mustExecute(t, s, queries)
+
+	// Every snapshot attempt must fail while the transaction is open.
+	for i := range 2 {
+		if err := s.Snapshot(0); err == nil {
+			t.Fatalf("expected snapshot attempt %d to fail with a transaction open", i)
+		}
+	}
+
+	// Once the transaction commits, the snapshot must succeed.
+	mustExecute(t, s, []string{`COMMIT`})
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot after COMMIT: %s", err)
+	}
+
+	// Restart the node from its snapshots, and check every row is there.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("error closing Store: %v", err)
+	}
+	if err := s.ForceSnapshotRestore(); err != nil {
+		t.Fatalf("failed to force restore from snapshot: %v", err)
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("error reopening Store: %v", err)
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	rows, _, _, err := s.Query(context.Background(), queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false))
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1001]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func mustExecute(t *testing.T, s *Store, queries []string) []*proto.ExecuteQueryResponse {
 	t.Helper()
 	rows, _, err := s.Execute(context.Background(), executeRequestFromStrings(queries, false, false))
