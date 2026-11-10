@@ -881,6 +881,34 @@ func Test_ClientExecute_Retry_ResentAfterTimeout(t *testing.T) {
 	}
 }
 
+// Test_ClientRequestNotResentAfterReadTimeout tests that a client with 0 for max retries
+// does not send any retries waiting for a response from the service suffers a timeout.
+// See https://github.com/rqlite/rqlite/issues/3000
+func Test_ClientRequestNotResentAfterReadTimeout(t *testing.T) {
+	var applied atomic.Int32
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		if readCommand(conn) == nil {
+			return
+		}
+		if applied.Add(1) == 1 {
+			time.Sleep(300 * time.Millisecond) // reply arrives after the client's timeout
+		}
+		p, _ := pb.Marshal(&proto.CommandRequestResponse{})
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.ExecuteQueryRequest{Request: &command.Request{
+		Statements: []*command.Statement{{Sql: "INSERT INTO foo VALUES(1)"}}}}
+	_, _, _, err := c.Request(context.Background(), req, srv.Addr(), nil, 100*time.Millisecond, 0)
+	if err == nil && applied.Load() > 1 {
+		t.Fatalf("write acknowledged once but applied %d times with retries=0", applied.Load())
+	}
+}
+
 func Test_ClientRetry_ContextCanceled(t *testing.T) {
 	// Server is slow, context is canceled before retry completes.
 	srv := servicetest.NewService()
