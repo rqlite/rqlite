@@ -1,3 +1,6 @@
+## v10.7.1 (November 9th 2026)
+This release is unchanged relative to v10.7.0 and simply fixes a Docker packaging issue.
+
 ## v10.7.0 (November 9th 2026)
 This release provides more options for securing backups in the Cloud, upgrades SQLite to 3.54.1, as well as many minor bug fixes.
 
