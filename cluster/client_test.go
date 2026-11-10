@@ -903,8 +903,8 @@ func Test_ClientRetry_ContextCanceled(t *testing.T) {
 }
 
 // Test_ClientRejectedCommandDropsConnection checks that a connection on which
-// the service rejected a command, and which the service then closes, is not
-// returned to the pool, while a connection carrying an ordinary error is.
+// the service sets "close connection", or a failing backup, results in the
+// connection being closed
 func Test_ClientRejectedCommandDropsConnection(t *testing.T) {
 	query := func(c *Client, addr string) error {
 		_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
@@ -919,12 +919,12 @@ func Test_ClientRejectedCommandDropsConnection(t *testing.T) {
 		name     string
 		send     func(c *Client, addr string) error
 		errStr   string
+		setClose bool
 		wantIdle int
 	}{
-		{"unauthorized", query, unauthorizedError, 0},
-		{"unsupported", query, unsupportedError, 0},
-		{"other_error", query, "no such table", 1},
-		{"backup_error", backup, "BackupRequest is nil", 0},
+		{"generic set close", query, unsupportedError, true, 0},
+		{"other_error", query, "no such table", false, 1},
+		{"backup_error", backup, "BackupRequest is nil", false, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := servicetest.NewService()
@@ -933,7 +933,7 @@ func Test_ClientRejectedCommandDropsConnection(t *testing.T) {
 				if c == nil {
 					return
 				}
-				p, err := errorResponse(c.Type, tc.errStr)
+				p, err := errorResponse(c.Type, tc.errStr, tc.setClose)
 				if err != nil {
 					t.Errorf("failed to build error response: %s", err)
 					conn.Close()

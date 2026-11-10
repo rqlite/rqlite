@@ -701,18 +701,10 @@ func (c *Client) roundTrip(nodeAddr string, command *proto.Command, timeout time
 	if err := pb.Unmarshal(p, resp); err != nil {
 		return fmt.Errorf("protobuf unmarshal: %w", err)
 	}
-	if r, ok := resp.(interface{ GetError() string }); ok && closesConnection(r.GetError()) {
+	if r, ok := resp.(interface{ GetCloseConnection() bool }); ok && r.GetCloseConnection() {
 		handleConnError(conn)
 	}
 	return nil
-}
-
-// closesConnection returns whether a reply carrying the given error is the
-// last thing the remote Service sends on the connection before closing it.
-// Such a connection must not go back into the pool, where the next command
-// sent on it would fail.
-func closesConnection(errStr string) bool {
-	return errStr == unauthorizedError || errStr == unsupportedError
 }
 
 // retry sends command to the node at nodeAddr, unmarshaling the reply into
