@@ -1,7 +1,3 @@
-## v10.7.2 (unreleased)
-### Implementation changes and bug fixes
-- [PR #3036](https://github.com/rqlite/rqlite/pull/3036): Fail snapshots with a clear error while a transaction is open and improve WAL snapshot test coverage.
-
 ## v10.7.1 (November 9th 2026)
 This release is unchanged relative to v10.7.0 and simply fixes a Docker packaging issue.
 

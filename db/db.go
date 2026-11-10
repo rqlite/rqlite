@@ -1181,12 +1181,6 @@ func (db *DB) pragmas() (map[string]any, error) {
 	return map[string]any{"rw": rw, "ro": ro}, nil
 }
 
-// InTransaction returns whether a transaction is open on the read-write
-// connection.
-func (db *DB) InTransaction() (bool, error) {
-	return db.writer.inTransaction()
-}
-
 // txStatus returns whether there is an active transaction on each database
 // connection.
 func (db *DB) txStatus() (map[string]any, error) {
