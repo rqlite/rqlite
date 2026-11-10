@@ -961,6 +961,9 @@ func (m *mockSnapshotStreamer) Term() uint64 {
 // until the transaction ends, and the snapshot taken after COMMIT must
 // contain the rows written inside the transaction. The node is restored
 // from that snapshot to check what it contains.
+//
+// Using rqlite this way is not officially supported. This test is here to
+// make sure that a user who does it anyway does not lose data.
 func Test_SingleNodeSnapshot_ExplicitTransaction(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
