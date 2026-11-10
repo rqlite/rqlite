@@ -1,4 +1,4 @@
-## v10.7.0 (unreleased)
+## v10.7.0 (November 9th 2026)
 This release provides more options for securing backups in the Cloud, upgrades SQLite to 3.54.1, as well as many minor bug fixes.
 
 ### New features
