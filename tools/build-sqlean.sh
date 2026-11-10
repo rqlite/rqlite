@@ -27,7 +27,7 @@ curl --retry 5 --retry-delay 5 -L "$sqlean_url" -o sqlean.tar.gz
 log "[3/4] Extract and build"
 tar xvfz sqlean.tar.gz
 cd nalgeon*
-make prepare-dist download-sqlite download-external compile-linux
+make prepare-dist download-sqlite build
 
 log "[4/4] Package dist/sqlean.so into $OUTPUT_DIR/sqlean.zip"
 zip -j "$OUTPUT_DIR/sqlean.zip" dist/sqlean.so
