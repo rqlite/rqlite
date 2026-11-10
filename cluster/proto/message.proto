@@ -14,6 +14,7 @@ message NodeMeta {
     string url = 1;
     uint64 commit_index = 2;
     string version = 3;
+    bool close_connection = 4;
 }
 
 message Command {
@@ -60,12 +61,14 @@ message CommandExecuteResponse {
     string error = 1;
     repeated command.ExecuteQueryResponse response = 2;
     uint64 raftIndex = 3;
+    bool close_connection = 4;
 }
 
 message CommandQueryResponse {
     string error = 1;
     repeated command.QueryRows rows = 2;
     uint64 raftIndex = 3;
+    bool close_connection = 4;
 }
 
 message CommandRequestResponse {
@@ -73,44 +76,54 @@ message CommandRequestResponse {
     repeated command.ExecuteQueryResponse response = 2;
     uint64 raftIndex = 3;
     uint64 numRW = 4;
+    bool close_connection = 5;
 }
 
 message CommandBackupResponse {
     string error = 1;
     bytes data = 2;
+    bool close_connection = 3;
 }
 
 message CommandLoadResponse {
     string error = 1;
+    bool close_connection = 2;
 }
 
 message CommandLoadChunkResponse {
     string error = 1;
+    bool close_connection = 2;
 }
 
 message CommandRemoveNodeResponse {
     string error = 1;
+    bool close_connection = 2;
 }
 
 message CommandDemoteNodeResponse {
     string error = 1;
+    bool close_connection = 2;
 }
 
 message CommandPromoteNodeResponse {
     string error = 1;
+    bool close_connection = 2;
 }
 
 message CommandNotifyResponse {
     string error = 1;
+    bool close_connection = 2;
 }
 
 message CommandJoinResponse {
     string error = 1;
     string leader = 2;
+    bool close_connection = 3;
 }
 
 message CommandStepdownResponse {
     string error = 1;
+    bool close_connection = 3;
 }
 
 message HighwaterMarkUpdateRequest {
@@ -120,4 +133,5 @@ message HighwaterMarkUpdateRequest {
 
 message HighwaterMarkUpdateResponse {
     string error = 1;
+    bool close_connection = 2;
 }
