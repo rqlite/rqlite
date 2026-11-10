@@ -903,3 +903,90 @@ func Test_CheckpointManager_Checkpoint_OpenTransactionCommits(t *testing.T) {
 		t.Fatalf("unexpected rows after replay: got %s, want %s", got, exp)
 	}
 }
+
+// Test_CheckpointManager_Checkpoint_OpenTransactionOnWriter tests a checkpoint
+// attempted while an explicit transaction is open on the write connection. It
+// must fail with an error the caller may retry, report no bytes written, and
+// leave the WAL and the manager's resume state as they were. Once the
+// transaction commits, the next checkpoint must carry every committed row.
+func Test_CheckpointManager_Checkpoint_OpenTransactionOnWriter(t *testing.T) {
+	path := mustTempFile()
+	defer RemoveFiles(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+	mustExecute(db, `CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+
+	// Checkpoint the table creation, and keep a copy of the database as it
+	// stands now to replay the compacted WAL against later.
+	cm, err := NewCheckpointManager(db)
+	if err != nil {
+		t.Fatalf("failed to create checkpoint manager: %s", err.Error())
+	}
+	if _, _, err := cm.Checkpoint(nil, 5*time.Second); err != nil {
+		t.Fatalf("failed to checkpoint: %s", err.Error())
+	}
+	base := mustTempFile()
+	defer RemoveFiles(base)
+	mustCopyFile(base, path)
+
+	// Commit one row, then open a transaction and write a second row inside it.
+	mustExecute(db, `INSERT INTO foo(name) VALUES('fiona')`)
+	mustExecute(db, "BEGIN")
+	mustExecute(db, `INSERT INTO foo(name) VALUES('declan')`)
+	walSz := mustFileSize(db.WALPath())
+
+	// The checkpoint must fail. The error must not be one which reports itself
+	// as not retryable, since the checkpoint will work once the transaction ends.
+	var buf bytes.Buffer
+	_, n, err := cm.Checkpoint(&buf, 100*time.Millisecond)
+	if err == nil {
+		t.Fatal("expected checkpoint to fail with a transaction open on the write connection")
+	}
+	var re RetryableError
+	if errors.As(err, &re) && !re.Retryable() {
+		t.Fatalf("expected an error which may be retried, got %s", err.Error())
+	}
+	if n != 0 {
+		t.Fatalf("expected 0 bytes reported on error, got %d", n)
+	}
+	if cm.resetWatch.armed {
+		t.Fatal("expected the failed checkpoint to leave the manager's resume state unset")
+	}
+	if sz := mustFileSize(db.WALPath()); sz != walSz {
+		t.Fatalf("expected the failed checkpoint to leave the WAL at %d bytes, got %d", walSz, sz)
+	}
+
+	// Commit the transaction. The next checkpoint must succeed, and its
+	// compacted WAL must carry both rows.
+	mustExecute(db, "COMMIT")
+	buf.Reset()
+	meta, n, err := cm.Checkpoint(&buf, 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to checkpoint after COMMIT: %s", err.Error())
+	}
+	if !meta.Success() {
+		t.Fatalf("expected checkpoint to succeed, got meta=%s", meta)
+	}
+	if n == 0 || int(n) != buf.Len() {
+		t.Fatalf("expected %d compacted WAL bytes to be reported, got %d", buf.Len(), n)
+	}
+	if err := os.WriteFile(base+"-compacted", buf.Bytes(), 0644); err != nil {
+		t.Fatalf("failed to write compacted WAL: %s", err.Error())
+	}
+	if err := ReplayWAL(base, []string{base + "-compacted"}, false); err != nil {
+		t.Fatalf("failed to replay compacted WAL: %s", err.Error())
+	}
+	replayed, err := Open(base, false, true)
+	if err != nil {
+		t.Fatalf("failed to open replayed database: %s", err.Error())
+	}
+	defer replayed.Close()
+	rows := mustQuery(replayed, "SELECT id, name FROM foo")
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"declan"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected rows after replay: got %s, want %s", got, exp)
+	}
+}
