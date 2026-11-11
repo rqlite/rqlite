@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -47,7 +48,7 @@ func Test_SingleNode(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := run(dir, strings.NewReader("y\n"), &out); err != nil {
+	if err := run(dir, strings.NewReader("1\n"), &out); err != nil {
 		t.Fatalf("failed to run: %s", err)
 	}
 	mustHavePeers(t, out.String(), peer{ID: "node1", Address: "localhost:4002"})
@@ -100,12 +101,27 @@ func Test_MultiNodeWithSnapshot(t *testing.T) {
 	// The operator says it is the third node, the non-voter, which must
 	// become a voter to run by itself.
 	var out bytes.Buffer
-	if err := run(dir, strings.NewReader("3\nyes\n"), &out); err != nil {
+	if err := run(dir, strings.NewReader("1\n3\n"), &out); err != nil {
 		t.Fatalf("failed to run: %s", err)
 	}
 	mustHavePeers(t, out.String(), peer{ID: "node3", Address: "host3:4002"})
 
-	if err := run(dir, strings.NewReader("4\n"), io.Discard); err == nil {
+	// Full-cluster recovery includes every member, as it was.
+	out.Reset()
+	if err := run(dir, strings.NewReader("2\n"), &out); err != nil {
+		t.Fatalf("failed to run: %s", err)
+	}
+	for _, s := range []string{"host1:4002", "host2:4002", "host3:4002"} {
+		if !strings.Contains(out.String(), "Raft address "+s) {
+			t.Fatalf("member %s not listed in output:\n%s", s, out.String())
+		}
+	}
+	mustHavePeers(t, out.String(),
+		peer{ID: "node1", Address: "host1:4002"},
+		peer{ID: "node2", Address: "host2:4002"},
+		peer{ID: "node3", Address: "host3:4002", NonVoter: true})
+
+	if err := run(dir, strings.NewReader("1\n4\n"), io.Discard); err == nil {
 		t.Fatalf("expected error choosing a node which does not exist")
 	}
 }
@@ -159,8 +175,8 @@ func mustWriteSnapshot(t *testing.T, dir string, index, term uint64, servers ...
 }
 
 // mustHavePeers checks that the output contains a peers file holding exactly
-// the given peer.
-func mustHavePeers(t *testing.T, out string, exp peer) {
+// the given peers.
+func mustHavePeers(t *testing.T, out string, exp ...peer) {
 	t.Helper()
 	start, end := strings.Index(out, "["+"\n"), strings.LastIndex(out, "\n]")
 	if start < 0 || end < 0 {
@@ -170,7 +186,7 @@ func mustHavePeers(t *testing.T, out string, exp peer) {
 	if err := json.Unmarshal([]byte(out[start:end+2]), &peers); err != nil {
 		t.Fatalf("failed to unmarshal peers: %s\n%s", err, out)
 	}
-	if len(peers) != 1 || peers[0] != exp {
+	if !slices.Equal(peers, exp) {
 		t.Fatalf("wrong peers, exp %+v, got %+v", exp, peers)
 	}
 }

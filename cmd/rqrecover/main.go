@@ -1,7 +1,8 @@
 // Command rqrecover inspects the data directory of a stopped rqlite node, and
 // reports what an operator needs to know when recovering a cluster that has
-// lost quorum. It can also generate the peers file which will bring the node
-// back online as a single-node cluster.
+// lost quorum, including the members of that cluster. It can also generate
+// the peers file which will bring the node back online by itself, or the one
+// which will bring back the whole cluster.
 //
 // rqrecover never modifies the data directory.
 package main
@@ -92,9 +93,15 @@ func run(dir string, in io.Reader, out io.Writer) error {
 	}
 	stdin := bufio.NewReader(in)
 
-	self, err := chooseSelf(info.Servers, stdin, out)
-	if err != nil {
-		return err
+	// A data directory does not record which member of the cluster the node
+	// is, so that is only known for certain when there is a single member.
+	single := len(info.Servers) == 1
+	if single {
+		fmt.Fprintf(out, "Node ID:           %s\n", info.Servers[0].ID)
+		fmt.Fprintf(out, "Raft address:      %s\n", info.Servers[0].Address)
+	} else {
+		fmt.Fprintf(out, "Node ID:           not recorded in the data directory, one of the cluster members below\n")
+		fmt.Fprintf(out, "Raft address:      not recorded in the data directory, one of the cluster members below\n")
 	}
 
 	var fulls int
@@ -103,8 +110,6 @@ func run(dir string, in io.Reader, out io.Writer) error {
 			fulls++
 		}
 	}
-	fmt.Fprintf(out, "Node ID:           %s\n", self.ID)
-	fmt.Fprintf(out, "Raft address:      %s\n", self.Address)
 	fmt.Fprintf(out, "Pending commands:  %d (Raft log holds indexes %d to %d)\n",
 		info.PendingCommands, info.FirstIndex, info.LastIndex)
 	fmt.Fprintf(out, "Snapshots:         %d (%d full, %d incremental)\n",
@@ -118,49 +123,79 @@ func run(dir string, in io.Reader, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "SQLite database:   %s (WAL %s)\n", size(info.SQLiteSize), size(info.WALSize))
 
-	fmt.Fprintf(out, "\nGenerate the peers file which brings this node back online by itself? [y/N] ")
-	answer, err := stdin.ReadString('\n')
-	if err != nil && err != io.EOF {
+	fmt.Fprintf(out, "\nCluster members:   %d, as last known to this node\n", len(info.Servers))
+	printServers(out, info.Servers)
+
+	fmt.Fprintln(out, "\nGenerate a peers file?")
+	fmt.Fprintln(out, "  1) Single-node recovery: bring this node back online by itself")
+	fmt.Fprintln(out, "  2) Full-cluster recovery: bring every member above back online")
+	fmt.Fprint(out, "Press 1 or 2, or anything else to quit: ")
+	answer, err := readLine(stdin)
+	if err != nil {
 		return err
 	}
-	switch strings.ToLower(strings.TrimSpace(answer)) {
-	case "y", "yes":
+
+	var peers []peer
+	var advice string
+	switch answer {
+	case "1":
+		self := info.Servers[0]
+		if !single {
+			fmt.Fprintf(out, "\nWhich member is this node? [1-%d] ", len(info.Servers))
+			answer, err := readLine(stdin)
+			if err != nil {
+				return err
+			}
+			n, err := strconv.Atoi(answer)
+			if err != nil || n < 1 || n > len(info.Servers) {
+				return fmt.Errorf("%q is not a number between 1 and %d", answer, len(info.Servers))
+			}
+			self = info.Servers[n-1]
+		}
+		// A node recovered by itself must be a voter, whatever it was before.
+		peers = []peer{{ID: string(self.ID), Address: string(self.Address)}}
+		advice = fmt.Sprintf("Save this as %s, then start the node.", filepath.Join(dir, peersPath))
+	case "2":
+		for _, s := range info.Servers {
+			peers = append(peers, peer{
+				ID:       string(s.ID),
+				Address:  string(s.Address),
+				NonVoter: s.Suffrage != raft.Voter,
+			})
+		}
+		advice = fmt.Sprintf("Remove any member which will not be started again, and correct any address\n"+
+			"which has changed. Then save this as %s in the data directory of every\n"+
+			"remaining member, and start them all.", peersPath)
 	default:
 		return nil
 	}
 
-	// A node recovered by itself must be a voter, whatever it was before.
-	b, err := json.MarshalIndent([]peer{{ID: string(self.ID), Address: string(self.Address)}}, "", "  ")
+	b, err := json.MarshalIndent(peers, "", "  ")
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "\n%s\n\n", b)
-	fmt.Fprintf(out, "Save this as %s, then start the node.\n", filepath.Join(dir, peersPath))
+	fmt.Fprintf(out, "\n%s\n\n%s\n", b, advice)
 	return nil
 }
 
-// chooseSelf returns the server which is the node being inspected, asking the
-// operator when the membership alone cannot answer that.
-func chooseSelf(servers []raft.Server, in *bufio.Reader, out io.Writer) (raft.Server, error) {
-	if len(servers) == 1 {
-		return servers[0], nil
-	}
-	fmt.Fprintln(out, "This node was last part of a cluster with the following members:")
-	fmt.Fprintln(out)
+// printServers lists the members of a cluster, numbered from 1.
+func printServers(out io.Writer, servers []raft.Server) {
 	for i, s := range servers {
-		fmt.Fprintf(out, "  %d) ID %s, Raft address %s, %s\n", i+1, s.ID, s.Address, strings.ToLower(s.Suffrage.String()))
+		role := "voter"
+		if s.Suffrage != raft.Voter {
+			role = "non-voter"
+		}
+		fmt.Fprintf(out, "  %d) ID %s, Raft address %s, %s\n", i+1, s.ID, s.Address, role)
 	}
-	fmt.Fprintf(out, "\nThe data directory does not record which one it is. Which is this node? [1-%d] ", len(servers))
-	answer, err := in.ReadString('\n')
+}
+
+// readLine reads a line of input, with surrounding whitespace removed.
+func readLine(in *bufio.Reader) (string, error) {
+	line, err := in.ReadString('\n')
 	if err != nil && err != io.EOF {
-		return raft.Server{}, err
+		return "", err
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(answer))
-	if err != nil || n < 1 || n > len(servers) {
-		return raft.Server{}, fmt.Errorf("%q is not a number between 1 and %d", strings.TrimSpace(answer), len(servers))
-	}
-	fmt.Fprintln(out)
-	return servers[n-1], nil
+	return strings.TrimSpace(line), nil
 }
 
 // inspect reads the data directory at dir, without modifying it.
