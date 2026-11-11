@@ -16,6 +16,7 @@ copy_binaries () {
     cp $2/rqlited $1
     cp $2/rqlite $1
     cp $2/rqbench $1
+    cp $2/rqrecover $1
 }
 
 # Read command line arguments
