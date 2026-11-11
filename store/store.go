@@ -1798,7 +1798,21 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY:
 		var srcFD *os.File
 		var err error
-		if br.Vacuum {
+		if len(br.Tables) > 0 {
+			// Restricting the backup means building a new database from a copy,
+			// so the whole file has to exist before anything is streamed.
+			var tmpPath string
+			tmpPath, err = s.restrictedBackupFile(br)
+			if err != nil {
+				return 0, err
+			}
+			defer fsutil.Remove(tmpPath)
+			srcFD, err = os.Open(tmpPath)
+			if err != nil {
+				return 0, err
+			}
+			defer srcFD.Close()
+		} else if br.Vacuum {
 			if !br.Compress {
 				if f, ok := dst.(*os.File); ok {
 					// Fast path, just vacuum directly to the destination.
@@ -1898,6 +1912,10 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			return int(sz), err
 		}
 
+		if err := sql.RestrictToTables(tmpFD.Name(), br.Tables); err != nil {
+			return 0, err
+		}
+
 		// Re-open the temporary file for reading (to ensure all data is written)
 		tmpReadFD, err := os.Open(tmpFD.Name())
 		if err != nil {
@@ -1924,6 +1942,31 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 		return 0, err
 	}
 	return 0, ErrInvalidBackupFormat
+}
+
+// restrictedBackupFile writes a copy of the database holding only the tables
+// named in the request to a scratch file, and returns its path. The caller is
+// responsible for removing the file.
+func (s *Store) restrictedBackupFile(br *proto.BackupRequest) (string, error) {
+	fd, err := createTemp(s.dbDir, backupScratchPattern)
+	if err != nil {
+		return "", err
+	}
+	path := fd.Name()
+	if err := fd.Close(); err != nil {
+		fsutil.Remove(path)
+		return "", err
+	}
+
+	if _, err := s.db.Backup(path, br.Vacuum); err != nil {
+		fsutil.Remove(path)
+		return "", err
+	}
+	if err := sql.RestrictToTables(path, br.Tables); err != nil {
+		fsutil.Remove(path)
+		return "", err
+	}
+	return path, nil
 }
 
 // Load loads an entire SQLite file into the database, sending the request
