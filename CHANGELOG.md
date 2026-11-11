@@ -1,3 +1,7 @@
+## v10.8.0 (unreleased)
+### New features
+- Add `rqrecover`, a tool which inspects the data directory of a stopped node and generates the `peers.json` file needed to recover it. It is included in the Docker image and release archives.
+
 ## v10.7.1 (November 9th 2026)
 This release is unchanged relative to v10.7.0 and simply fixes a Docker packaging issue.
 
