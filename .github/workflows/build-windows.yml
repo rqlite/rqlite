@@ -36,6 +36,9 @@ jobs:
     - name: Build shell
       run:  set CGO_ENABLED=1 && set CC=gcc && go build -a -ldflags="-w -s" ./cmd/rqlite
 
+    - name: Build recovery tool
+      run:  set CGO_ENABLED=1 && set CC=gcc && go build -a -ldflags="-w -s" ./cmd/rqrecover
+
     - name: Zip up the binaries
       run:  7z.exe a rqlite-${{ github.event.release.tag_name }}-win64.zip rqlite.exe rq*.exe
 
