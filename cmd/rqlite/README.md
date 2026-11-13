@@ -44,9 +44,18 @@ Options:
 ```
 ### Environment Variables
 
-The rqlite shell also supports configuration through environment variables:
+The rqlite shell also supports configuration through environment variables. Command-line flags always take precedence over environment variables.
 
-- `RQLITE_HOST`: Connection string in the format `[scheme:]//host[:port]`
+- `RQLITE_HOST`: Comma-delimited list of URLs, each in the format `[scheme:]//host[:port]`. The first URL is the node the shell connects to, and any remaining URLs are used as fallbacks.
+- `RQLITE_CREDENTIALS`: Basic auth credentials in the form `username:password`.
+- `RQLITE_USER`, `RQLITE_PASSWORD`: Basic auth credentials as separate variables. Ignored if `RQLITE_CREDENTIALS` is set.
+- `RQLITE_INSECURE`: Set to `true` to skip verification of the rqlited HTTPS certificate.
+- `RQLITE_CA_CERT`: Path to trusted X.509 root CA certificate.
+
+For example:
+```sh
+$ RQLITE_HOST="https://node1:4001,https://node2:4001" RQLITE_CREDENTIALS="bob:secret" rqlite
+```
 
 ## Example
 Connecting to a host running locally:
