@@ -10,8 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	cdcjson "github.com/rqlite/rqlite/v10/cdc/json"
@@ -48,6 +50,10 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
+	if exp, got := uint64(0), svc.HighWatermark(); exp != got {
+		t.Fatalf("service started with knowledge of highwater mark, it's set to %d", got)
+	}
+
 	if err := svc.Start(); err != nil {
 		t.Fatalf("failed to start service: %v", err)
 	}
@@ -475,6 +481,49 @@ func Test_ServiceRestart_UndeliveredEventsNotLost(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		t.Fatalf("not all seeded events were delivered after restart: delivered=%v (want indices 5, 6, 7)", delivered)
+	}
+}
+
+// Test_NewService_NonEmptyFIFO_ZeroHWM tests that a service created over a FIFO
+// that already holds items comes up with its high watermark set to zero. This is
+// to test that new Service with data assumes nothing about what has been delivered.
+// This may result in duplicates when the HWM is set to a non-zero value but that is
+// what this system's design says might happen.
+func Test_NewService_NonEmptyFIFO_ZeroHWM(t *testing.T) {
+	ResetStats()
+
+	// Pre-seed the FIFO. The Service keeps its FIFO at <dir>/cdc/fifo.db.
+	tempDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tempDir, "cdc"), 0o755); err != nil {
+		t.Fatalf("failed to create CDC dir: %v", err)
+	}
+	func() {
+		q, err := NewQueue(filepath.Join(tempDir, "cdc", cdcDB))
+		if err != nil {
+			t.Fatalf("failed to open FIFO for seeding: %v", err)
+		}
+		defer q.Close()
+		for _, idx := range []uint64{10, 20, 30} {
+			if err := q.Enqueue(&Event{Index: idx, Data: []byte("data")}); err != nil {
+				t.Fatalf("failed to enqueue seed event %d: %v", idx, err)
+			}
+		}
+	}()
+
+	cfg := DefaultConfig()
+	cfg.Endpoint = "stdout"
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
+	svc, err := NewService("node1", tempDir, &mockCluster{}, in, cfg)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	defer svc.fifo.Close()
+
+	if got, exp := svc.fifo.Len(), 3; got != exp {
+		t.Fatalf("expected FIFO to hold %d items, got %d", exp, got)
+	}
+	if got, exp := svc.HighWatermark(), uint64(0); got != exp {
+		t.Fatalf("expected high watermark of %d for service with non-empty FIFO, got %d", exp, got)
 	}
 }
 
@@ -1073,6 +1122,77 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 	}, 2*time.Second)
 }
 
+// Test_ServiceHWMUpdate_Leader_ZeroNotBroadcast tests that a leader whose high
+// watermark is zero does not broadcast it, and starts broadcasting only once
+// it has delivered something.
+func Test_ServiceHWMUpdate_Leader_ZeroNotBroadcast(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ResetStats()
+
+		cl := &mockCluster{}
+
+		cfg := DefaultConfig()
+		cfg.MaxBatchSz = 1
+		cfg.MaxBatchDelay = 50 * time.Millisecond
+		cfg.HighWatermarkInterval = 100 * time.Millisecond
+		cfg.Endpoint = "stdout"
+		in := make(chan *proto.CDCIndexedEventGroup, 100)
+		svc, err := NewService(
+			"node1",
+			t.TempDir(),
+			cl,
+			in,
+			cfg,
+		)
+		if err != nil {
+			t.Fatalf("failed to create service: %v", err)
+		}
+		if err := svc.Start(); err != nil {
+			t.Fatalf("failed to start service: %v", err)
+		}
+		defer svc.Stop()
+
+		// Make it the leader, and let many broadcast intervals pass with
+		// nothing delivered.
+		cl.SetLeader(0)
+		time.Sleep(10 * cfg.HighWatermarkInterval)
+		synctest.Wait()
+		if !svc.IsLeader() {
+			t.Fatalf("service is not leader")
+		}
+		if got := svc.HighWatermark(); got != 0 {
+			t.Fatalf("expected high watermark of 0, got %d", got)
+		}
+		if got := cl.Broadcasts(); len(got) != 0 {
+			t.Fatalf("expected no broadcasts while high watermark is 0, got %v", got)
+		}
+
+		// Deliver an event. The high watermark is now known, and broadcast.
+		in <- &proto.CDCIndexedEventGroup{
+			Index: 10,
+			Events: []*proto.CDCEvent{
+				{
+					Op:          proto.CDCEvent_INSERT,
+					Table:       "foo",
+					ColumnNames: []string{"id", "name"},
+					NewRowId:    1,
+				},
+			},
+		}
+		time.Sleep(10 * cfg.HighWatermarkInterval)
+		synctest.Wait()
+		got := cl.Broadcasts()
+		if len(got) == 0 {
+			t.Fatalf("expected broadcasts once high watermark is non-zero, got none")
+		}
+		for _, v := range got {
+			if v != 10 {
+				t.Fatalf("expected every broadcast to be 10, got %v", got)
+			}
+		}
+	})
+}
+
 // Test_ServiceHWMUpdate_Follow_NoRegress tests that a high watermark update
 // from the cluster never moves a node's high watermark backwards. This can
 // happen when a node delivers events as leader, loses leadership, and the new
@@ -1199,7 +1319,8 @@ type mockCluster struct {
 	leaderChannels []chan<- bool
 	hwmChannels    []chan<- uint64
 	snapshotSyncCh chan<- chan struct{}
-	currentLeader  int // index of current leader, -1 if none
+	currentLeader  int      // index of current leader, -1 if none
+	broadcasts     []uint64 // every value passed to BroadcastHighWatermark
 }
 
 func newMockCluster() *mockCluster {
@@ -1229,6 +1350,7 @@ func (tc *mockCluster) RegisterHWMUpdate(ch chan<- uint64) {
 func (tc *mockCluster) BroadcastHighWatermark(value uint64) error {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
+	tc.broadcasts = append(tc.broadcasts, value)
 
 	// Default behavior: broadcast to all registered HWM channels
 	for _, ch := range tc.hwmChannels {
@@ -1239,6 +1361,13 @@ func (tc *mockCluster) BroadcastHighWatermark(value uint64) error {
 		}
 	}
 	return nil
+}
+
+// Broadcasts returns every value passed to BroadcastHighWatermark, in order.
+func (tc *mockCluster) Broadcasts() []uint64 {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	return slices.Clone(tc.broadcasts)
 }
 
 // SetLeader sends true to the channel at leaderIndex and false to all others.

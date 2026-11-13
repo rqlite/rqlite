@@ -163,6 +163,9 @@ func (q *Queue) DeleteRange(idx uint64) error {
 	return <-req.respChan
 }
 
+// FirstKey returns the index of the oldest item still held in the queue,
+// regardless of whether that item has already been emitted on C. Items are
+// only removed by DeleteRange. If the queue is empty, FirstKey returns 0.
 func (q *Queue) FirstKey() (uint64, error) {
 	select {
 	case <-q.done:

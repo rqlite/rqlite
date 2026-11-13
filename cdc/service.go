@@ -304,20 +304,15 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 	}
 	srv.fifo = fifo
 
-	// Whatever is the first key in the FIFO we assume has not been sent. This ensures we meet the
-	// at-least-once guarantee. So set the highwater mark to one before.
+	// The high watermark starts at zero, meaning this node knows nothing about what
+	// has been delivered. Anything sitting in the FIFO is assumed not to have been
+	// sent to the webhook, which ensures we meet the at-least-once guarantee.
 	//
-	// In other words we assume that anything sitting in the queue has not been sent to the webhook.
-	// If that is not the case then an HWM update from other nodes in the cluster may update it
-	// (and prune the FIFO).
-	higHWM, err := fifo.FirstKey()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read first key from FIFO: %w", err)
-	}
-	if higHWM > 0 {
-		higHWM -= 1
-	}
-	srv.highWatermark.Store(higHWM)
+	// The watermark cannot be inferred from the FIFO. Each FIFO key is the highest
+	// index in a batch, so no value derived from the first key is safe to broadcast.
+	// Other nodes batch the same events differently, and would prune events this
+	// node has not delivered. A zero watermark is never broadcast. It advances only
+	// when this node delivers a batch, or receives an HWM update from the Leader.
 
 	return srv, nil
 }
@@ -355,6 +350,7 @@ func (s *Service) Stop() {
 	}
 	close(s.done)
 	s.wg.Wait()
+	s.batcher.Close()
 	s.fifo.Close()
 	if s.sink != nil {
 		s.sink.Close()
