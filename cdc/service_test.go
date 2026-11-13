@@ -1150,9 +1150,6 @@ func Test_ServiceHWMUpdate_Leader_ZeroNotBroadcast(t *testing.T) {
 		if err := svc.Start(); err != nil {
 			t.Fatalf("failed to start service: %v", err)
 		}
-		// Stop does not close the batcher, and every goroutine must have
-		// exited before the synctest bubble ends.
-		defer svc.batcher.Close()
 		defer svc.Stop()
 
 		// Make it the leader, and let many broadcast intervals pass with

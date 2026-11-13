@@ -350,6 +350,7 @@ func (s *Service) Stop() {
 	}
 	close(s.done)
 	s.wg.Wait()
+	s.batcher.Close()
 	s.fifo.Close()
 	if s.sink != nil {
 		s.sink.Close()
