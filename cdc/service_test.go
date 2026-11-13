@@ -48,6 +48,9 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
+	if exp, got := uint64(0), svc.HighWatermark(); exp != got {
+		t.Fatalf("service started with knowledge of highwater mark, it's set to %d", got)
+	}
 	if err := svc.Start(); err != nil {
 		t.Fatalf("failed to start service: %v", err)
 	}
