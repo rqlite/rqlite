@@ -373,6 +373,55 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeRecoverOpenTransaction tests a node recovery when the Raft
+// log ends with a transaction still open, because an explicit BEGIN was never
+// followed by COMMIT or ROLLBACK. Using rqlite this way is not officially
+// supported. Recovery must fail, and must leave the peers file in place.
+func Test_SingleNodeRecoverOpenTransaction(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	s.NoSnapshotOnClose = true
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`BEGIN`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	if _, _, err := s.Execute(context.Background(), er); err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	id, addr := s.ID(), s.Addr()
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	peersPath := filepath.Join(s.Path(), "/raft/peers.json")
+	mustWriteFile(peersPath, fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, id, addr))
+	if err := s.Open(); err == nil {
+		s.Close(true)
+		t.Fatal("expected recovery to fail with a transaction open at the end of the Raft log")
+	}
+
+	// A failed Open leaves the Store marked as not open, so Close does nothing.
+	// Release what Open acquired before it failed, or the files stay open and
+	// cannot be removed when the test ends.
+	defer s.dechunkManager.Close()
+	defer s.snapshotStore.Close()
+	defer s.boltStore.Close()
+	if !fsutil.PathExists(peersPath) {
+		t.Fatalf("expected Peers JSON to still exist at %s", peersPath)
+	}
+}
+
 func Test_SingleNodeRecoverForeignKeysEnabled(t *testing.T) {
 	s, ln := mustNewStoreFK(t)
 	defer ln.Close()
