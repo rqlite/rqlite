@@ -318,6 +318,7 @@ jobs:
     steps:
       - checkout
       - run: node http/console/tests/schema.test.js
+      - run: node http/console/tests/api.test.js
     resource_class: large
 
 workflows:

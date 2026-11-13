@@ -12,11 +12,9 @@
             opts.headers["Content-Type"] = "application/json";
             opts.body = JSON.stringify(body);
         }
-        return fetch(path, opts).then(function (resp) {
-            return resp.json().then(function (data) {
-                return { status: resp.status, data: data };
-            });
-        });
+        // Rejects if the request failed, including HTTP 200 responses which
+        // carry a top-level error. Callers handle per-statement errors only.
+        return fetch(path, opts).then(ConsoleAPI.readResponse);
     }
 
     function escapeHTML(str) {
