@@ -2039,7 +2039,9 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 	// changing, but it generally proves it doesn't come up.
 	mux0, ln0 := mustNewOpenMux("127.0.0.1:10000")
 	failedSingle := mustNodeEncrypted(node1.Store.ID(), node1.Dir, false, false, mux0, raftDialer, clstrDialer)
-	_, err = failedSingle.WaitForLeader()
+	// No leader is expected, so this wait always runs to its timeout. A node
+	// which could elect itself would do so within a few Raft timeouts.
+	_, err = failedSingle.Store.WaitForLeader(6 * RaftTimeout)
 	if err == nil {
 		t.Fatalf("no error waiting for leader")
 	}
@@ -2276,6 +2278,13 @@ func Test_MultiNodeClusterReapNodes(t *testing.T) {
 	}
 }
 
+// noReapWindow is how long the no-reap tests watch a dead node to confirm
+// it is not removed from the cluster. A leader sees heartbeats to a dead node
+// fail within about one Raft timeout, and the tests which do expect reaping
+// see it happen shortly after their one-second reap timeout, so this is
+// several times longer than a wrongly-triggered reap would need.
+const noReapWindow = 5 * time.Second
+
 // Test_MultiNodeClusterNoReap tests that a node is not reaped before
 // its time.
 func Test_MultiNodeClusterNoReap(t *testing.T) {
@@ -2317,7 +2326,7 @@ func Test_MultiNodeClusterNoReap(t *testing.T) {
 		nodes, _ = node1.Nodes(true)
 		return !nodes.HasAddr(nonVoter.RaftAddr)
 	}
-	if trueOrTimeout(tFn, 20*time.Second) {
+	if trueOrTimeout(tFn, noReapWindow) {
 		t.Fatalf("didn't time out waiting for node to be removed")
 	}
 }
@@ -2388,7 +2397,7 @@ func Test_MultiNodeClusterNoReapZero(t *testing.T) {
 		return !nodes.HasAddr(node3.RaftAddr)
 	}
 
-	if trueOrTimeout(tFn, 10*time.Second) {
+	if trueOrTimeout(tFn, noReapWindow) {
 		t.Fatalf("didn't time out waiting for node to be removed")
 	}
 }
@@ -2433,7 +2442,7 @@ func Test_MultiNodeClusterNoReapReadOnlyZero(t *testing.T) {
 		nodes, _ = node1.Nodes(true)
 		return !nodes.HasAddr(nonVoter.RaftAddr)
 	}
-	if trueOrTimeout(tFn, 10*time.Second) {
+	if trueOrTimeout(tFn, noReapWindow) {
 		t.Fatalf("didn't time out waiting for node to be removed")
 	}
 }
