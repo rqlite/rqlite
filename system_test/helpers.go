@@ -37,9 +37,12 @@ const (
 	// SnapshotThreshold is the number of outstanding log entries before a snapshot is triggered
 	SnapshotThreshold = 100
 
-	// ElectionTimeout is the period between elections. It's longer than
-	// the default to allow for slow CI systems.
-	ElectionTimeout = 2 * time.Second
+	// RaftTimeout is the Raft heartbeat, election, and leader-lease timeout
+	// used by nodes under test. Raft's defaults are sized for real networks,
+	// and every election and leader change in a test waits on them. These
+	// nodes only talk over loopback, so a shorter timeout is safe, but it is
+	// kept well above the minimum to allow for slow CI systems.
+	RaftTimeout = 500 * time.Millisecond
 
 	NoQueryTimeout = 0
 )
@@ -945,7 +948,9 @@ func mustNodeEncryptedCDC(id, dir string, enableSingle, httpEncrypt bool, mux *t
 	}, raftTn)
 	node.Store.SnapshotThreshold = SnapshotThreshold
 	node.Store.SnapshotInterval = SnapshotInterval
-	node.Store.ElectionTimeout = ElectionTimeout
+	node.Store.HeartbeatTimeout = RaftTimeout
+	node.Store.ElectionTimeout = RaftTimeout
+	node.Store.LeaderLeaseTimeout = RaftTimeout
 
 	credStr := mustNewMockCredentialStore()
 	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader), node.Store, node.Store, credStr)
