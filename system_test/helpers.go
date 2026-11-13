@@ -95,11 +95,15 @@ func (n *Node) Deprovision() {
 	if n == nil {
 		return
 	}
+	n.Service.Close()
+
+	// The Store snapshots as it closes, and waits for the CDC service to
+	// flush before it does. So the CDC service must outlive the Store, or
+	// every close waits for a flush that never comes.
+	n.Store.Close(true)
 	if n.CDC != nil {
 		n.CDC.Stop()
 	}
-	n.Service.Close()
-	n.Store.Close(true)
 	n.Cluster.Close()
 	n.Mux.Close()
 	fsutil.RemoveAll(n.Dir)
