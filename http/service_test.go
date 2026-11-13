@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -187,6 +188,15 @@ func Test_Options(t *testing.T) {
 	}
 	if resp.StatusCode != 200 {
 		t.Fatalf("failed to get expected 200 for OPTIONS, got %d", resp.StatusCode)
+	}
+
+	// Every method the API accepts which needs a CORS preflight must be
+	// allowed, or browsers will refuse to send the request.
+	allowed := resp.Header.Get("Access-Control-Allow-Methods")
+	for _, method := range []string{"OPTIONS", "GET", "POST", "DELETE"} {
+		if !slices.Contains(strings.Split(allowed, ", "), method) {
+			t.Fatalf("expected %s to be an allowed CORS method, got %q", method, allowed)
+		}
 	}
 }
 
