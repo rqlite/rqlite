@@ -315,6 +315,15 @@ func main() {
 		log.Printf("failed to close store: %s", err.Error())
 	}
 
+	// Stop the CDC service only once the Store, and therefore Raft, is down.
+	// No new CDC events can be generated after the Store closes, which lets
+	// the service drain any in-flight events to its FIFO without stalling
+	// the FSM. Stopping it earlier would leave the events channel undrained
+	// and could block Raft shutdown once the channel buffer fills.
+	if cdcServ != nil {
+		cdcServ.Stop()
+	}
+
 	// Close the query logger only once the store, and therefore every
 	// database connection that traces through it, has been closed.
 	if queryLogger != nil {
