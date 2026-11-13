@@ -10,8 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	cdcjson "github.com/rqlite/rqlite/v10/cdc/json"
@@ -1120,6 +1122,80 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 	}, 2*time.Second)
 }
 
+// Test_ServiceHWMUpdate_Leader_ZeroNotBroadcast tests that a leader whose high
+// watermark is zero does not broadcast it, and starts broadcasting only once
+// it has delivered something.
+func Test_ServiceHWMUpdate_Leader_ZeroNotBroadcast(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ResetStats()
+
+		cl := &mockCluster{}
+
+		cfg := DefaultConfig()
+		cfg.MaxBatchSz = 1
+		cfg.MaxBatchDelay = 50 * time.Millisecond
+		cfg.HighWatermarkInterval = 100 * time.Millisecond
+		cfg.Endpoint = "stdout"
+		in := make(chan *proto.CDCIndexedEventGroup, 100)
+		svc, err := NewService(
+			"node1",
+			t.TempDir(),
+			cl,
+			in,
+			cfg,
+		)
+		if err != nil {
+			t.Fatalf("failed to create service: %v", err)
+		}
+		if err := svc.Start(); err != nil {
+			t.Fatalf("failed to start service: %v", err)
+		}
+		// Stop does not close the batcher, and every goroutine must have
+		// exited before the synctest bubble ends.
+		defer svc.batcher.Close()
+		defer svc.Stop()
+
+		// Make it the leader, and let many broadcast intervals pass with
+		// nothing delivered.
+		cl.SetLeader(0)
+		time.Sleep(10 * cfg.HighWatermarkInterval)
+		synctest.Wait()
+		if !svc.IsLeader() {
+			t.Fatalf("service is not leader")
+		}
+		if got := svc.HighWatermark(); got != 0 {
+			t.Fatalf("expected high watermark of 0, got %d", got)
+		}
+		if got := cl.Broadcasts(); len(got) != 0 {
+			t.Fatalf("expected no broadcasts while high watermark is 0, got %v", got)
+		}
+
+		// Deliver an event. The high watermark is now known, and broadcast.
+		in <- &proto.CDCIndexedEventGroup{
+			Index: 10,
+			Events: []*proto.CDCEvent{
+				{
+					Op:          proto.CDCEvent_INSERT,
+					Table:       "foo",
+					ColumnNames: []string{"id", "name"},
+					NewRowId:    1,
+				},
+			},
+		}
+		time.Sleep(10 * cfg.HighWatermarkInterval)
+		synctest.Wait()
+		got := cl.Broadcasts()
+		if len(got) == 0 {
+			t.Fatalf("expected broadcasts once high watermark is non-zero, got none")
+		}
+		for _, v := range got {
+			if v != 10 {
+				t.Fatalf("expected every broadcast to be 10, got %v", got)
+			}
+		}
+	})
+}
+
 // Test_ServiceHWMUpdate_Follow_NoRegress tests that a high watermark update
 // from the cluster never moves a node's high watermark backwards. This can
 // happen when a node delivers events as leader, loses leadership, and the new
@@ -1246,7 +1322,8 @@ type mockCluster struct {
 	leaderChannels []chan<- bool
 	hwmChannels    []chan<- uint64
 	snapshotSyncCh chan<- chan struct{}
-	currentLeader  int // index of current leader, -1 if none
+	currentLeader  int      // index of current leader, -1 if none
+	broadcasts     []uint64 // every value passed to BroadcastHighWatermark
 }
 
 func newMockCluster() *mockCluster {
@@ -1276,6 +1353,7 @@ func (tc *mockCluster) RegisterHWMUpdate(ch chan<- uint64) {
 func (tc *mockCluster) BroadcastHighWatermark(value uint64) error {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
+	tc.broadcasts = append(tc.broadcasts, value)
 
 	// Default behavior: broadcast to all registered HWM channels
 	for _, ch := range tc.hwmChannels {
@@ -1286,6 +1364,13 @@ func (tc *mockCluster) BroadcastHighWatermark(value uint64) error {
 		}
 	}
 	return nil
+}
+
+// Broadcasts returns every value passed to BroadcastHighWatermark, in order.
+func (tc *mockCluster) Broadcasts() []uint64 {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	return slices.Clone(tc.broadcasts)
 }
 
 // SetLeader sends true to the channel at leaderIndex and false to all others.
