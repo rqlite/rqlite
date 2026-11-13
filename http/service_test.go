@@ -1343,6 +1343,7 @@ func Test_UIStaticAssets(t *testing.T) {
 	// Every script index.html loads must be served from the embedded assets.
 	for _, asset := range []string{
 		"/console/static/css/style.css",
+		"/console/static/js/api.js",
 		"/console/static/js/schema.js",
 		"/console/static/js/app.js",
 		"/console/static/js/cluster.js",
