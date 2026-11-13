@@ -2039,7 +2039,9 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 	// changing, but it generally proves it doesn't come up.
 	mux0, ln0 := mustNewOpenMux("127.0.0.1:10000")
 	failedSingle := mustNodeEncrypted(node1.Store.ID(), node1.Dir, false, false, mux0, raftDialer, clstrDialer)
-	_, err = failedSingle.WaitForLeader()
+	// No leader is expected, so this wait always runs to its timeout. A node
+	// which could elect itself would do so within a few Raft timeouts.
+	_, err = failedSingle.Store.WaitForLeader(6 * RaftTimeout)
 	if err == nil {
 		t.Fatalf("no error waiting for leader")
 	}
