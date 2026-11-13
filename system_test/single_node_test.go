@@ -1715,7 +1715,14 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 	}
 
 	// Wait for a snapshot to happen.
-	time.Sleep(5 * time.Second)
+	testPoll(t, func() (bool, error) {
+		stats, err := node.Store.Stats()
+		if err != nil {
+			return false, err
+		}
+		idx, _ := stats["raft"].(map[string]any)["last_snapshot_index"].(int64)
+		return idx > 0, nil
+	}, 100*time.Millisecond, 10*time.Second)
 
 	if err := node.Close(true); err != nil {
 		t.Fatalf("failed to close node")
@@ -1800,7 +1807,14 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 	}
 
 	// Wait for a snapshot to happen, and then write some more commands.
-	time.Sleep(5 * time.Second)
+	testPoll(t, func() (bool, error) {
+		stats, err := node.Store.Stats()
+		if err != nil {
+			return false, err
+		}
+		idx, _ := stats["raft"].(map[string]any)["last_snapshot_index"].(int64)
+		return idx > 0, nil
+	}, 100*time.Millisecond, 10*time.Second)
 	for i := range 5 {
 		if err := node.Noop(fmt.Sprintf("%d", i)); err != nil {
 			t.Fatalf("failed to write noop command: %s", err)
