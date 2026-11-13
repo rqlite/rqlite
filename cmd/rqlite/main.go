@@ -27,7 +27,14 @@ import (
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 )
 
-const HOST_ENV_VAR = "RQLITE_HOST"
+const (
+	HOST_ENV_VAR        = "RQLITE_HOST"
+	CREDENTIALS_ENV_VAR = "RQLITE_CREDENTIALS"
+	USER_ENV_VAR        = "RQLITE_USER"
+	PASSWORD_ENV_VAR    = "RQLITE_PASSWORD"
+	INSECURE_ENV_VAR    = "RQLITE_INSECURE"
+	CA_CERT_ENV_VAR     = "RQLITE_CA_CERT"
+)
 
 type Node struct {
 	Addr      string  `json:"addr"`
@@ -114,21 +121,8 @@ func main() {
 			return nil
 		}
 
-		_, hostEnvSet := os.LookupEnv(HOST_ENV_VAR)
-		if hostEnvSet && !(ctx.IsSet("--host", "-H") || ctx.IsSet("--port", "-p") || ctx.IsSet("--scheme", "-s")) {
-			protocol, host, port, err := httpcl.ParseHostEnv(HOST_ENV_VAR)
-			if err != nil {
-				return err
-			}
-			if protocol != "" {
-				argv.Protocol = protocol
-			}
-			if host != "" {
-				argv.Host = host
-			}
-			if port != 0 {
-				argv.Port = port
-			}
+		if err := applyEnvVars(ctx, argv); err != nil {
+			return err
 		}
 
 		httpClient, err := getHTTPClient(argv)
@@ -405,6 +399,54 @@ func main() {
 		ctx.String("bye~\n")
 		return nil
 	})
+}
+
+// applyEnvVars updates argv with any connection settings set via RQLITE_*
+// environment variables. Command-line flags always take precedence over
+// environment variables.
+func applyEnvVars(ctx *cli.Context, argv *argT) error {
+	_, hostEnvSet := os.LookupEnv(HOST_ENV_VAR)
+	if hostEnvSet && !(ctx.IsSet("--host", "-H") || ctx.IsSet("--port", "-p") || ctx.IsSet("--scheme", "-s")) {
+		protocol, host, port, alternatives, err := httpcl.ParseHostEnv(HOST_ENV_VAR)
+		if err != nil {
+			return err
+		}
+		if protocol != "" {
+			argv.Protocol = protocol
+		}
+		if host != "" {
+			argv.Host = host
+		}
+		if port != 0 {
+			argv.Port = port
+		}
+		if len(alternatives) > 0 && !ctx.IsSet("--alternatives", "-a") {
+			argv.Alternatives = strings.Join(alternatives, ",")
+		}
+	}
+
+	if !ctx.IsSet("--user", "-u") {
+		if creds, ok := httpcl.ParseCredentialsEnv(CREDENTIALS_ENV_VAR, USER_ENV_VAR, PASSWORD_ENV_VAR); ok {
+			argv.Credentials = creds
+		}
+	}
+
+	if !ctx.IsSet("--insecure", "-i") {
+		insecure, ok, err := httpcl.ParseBoolEnv(INSECURE_ENV_VAR)
+		if err != nil {
+			return err
+		}
+		if ok {
+			argv.Insecure = insecure
+		}
+	}
+
+	if !ctx.IsSet("--ca-cert", "-c") {
+		if caCert, ok := os.LookupEnv(CA_CERT_ENV_VAR); ok && caCert != "" {
+			argv.CACert = caCert
+		}
+	}
+	return nil
 }
 
 func onOff(b bool) string {
