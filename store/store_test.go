@@ -23,6 +23,10 @@ import (
 	"github.com/rqlite/rqlite/v10/testdata/chinook"
 )
 
+// testRaftTimeout is the Raft heartbeat, election, and leader-lease timeout
+// used by Stores created for testing.
+const testRaftTimeout = 100 * time.Millisecond
+
 // Test_NonOpenStore tests that a non-open Store handles public methods correctly.
 func Test_NonOpenStore(t *testing.T) {
 	s, ln := mustNewStore(t)
@@ -3484,6 +3488,14 @@ func mustNewStoreAtPathsLn(id, dataPath string, fk bool) (*Store, net.Listener) 
 	if s == nil {
 		panic("failed to create new store")
 	}
+
+	// Raft's default timeouts are sized for real networks. With them a node
+	// waits at least a second before it will call an election, which every
+	// test that opens a Store pays for. These nodes only ever talk over
+	// loopback, so much shorter timeouts are safe.
+	s.HeartbeatTimeout = testRaftTimeout
+	s.ElectionTimeout = testRaftTimeout
+	s.LeaderLeaseTimeout = testRaftTimeout
 	return s, ly
 }
 
