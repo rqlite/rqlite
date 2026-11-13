@@ -1,3 +1,7 @@
+## v10.8.0 (unreleased)
+### New features
+- [PR #3045](https://github.com/rqlite/rqlite/pull/3045): CLI supports comma-delimited failover URLs in `RQLITE_HOST`, as well as the connection environment variables `RQLITE_CREDENTIALS`, `RQLITE_USER`, `RQLITE_PASSWORD`, `RQLITE_INSECURE`, and `RQLITE_CA_CERT`. Fixes issue [#2010](https://github.com/rqlite/rqlite/issues/2010).
+
 ## v10.7.2 (November 16th 2026)
 ### Implementation changes and bug fixes
 - [PR #3041](https://github.com/rqlite/rqlite/pull/3041): Fixes for minor bugs related to CDC high water mark handling, which might have resulted in dropped events if the Leader changed while data remained unsent.
