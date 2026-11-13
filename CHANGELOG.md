@@ -1,3 +1,7 @@
+## v10.7.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #3041](https://github.com/rqlite/rqlite/pull/3041): Fixes for minor bugs related to CDC high water mark handling.
+
 ## v10.7.1 (November 9th 2026)
 This release is unchanged relative to v10.7.0 and simply fixes a Docker packaging issue.
 
