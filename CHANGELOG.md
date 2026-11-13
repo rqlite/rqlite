@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #3041](https://github.com/rqlite/rqlite/pull/3041): Fixes for minor bugs related to CDC high water mark handling, which might have resulted in dropped events if the Leader change while data remained unsent.
 - [PR #3042](https://github.com/rqlite/rqlite/pull/3042): Reduce Raft timeouts for `store` package testing so CI testing completes faster. The default, longer, timeouts are more suitable for actual production setups.
+- [PR #3043](https://github.com/rqlite/rqlite/pull/3043): Reduce test timeouts for `system_test` package, which results in faster testing. Production timeouts remain unchanged.
 
 ## v10.7.1 (November 9th 2026)
 This release is unchanged relative to v10.7.0 and simply fixes a Docker packaging issue.
