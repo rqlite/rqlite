@@ -1069,6 +1069,76 @@ func (db *DB) Backup(path string, vacuum bool) (sz int64, retErr error) {
 	return
 }
 
+// RestrictToTables removes from the database at the given path every table
+// except those named, dropping with each table the indexes and triggers that
+// belong to it, and compacts what is left so the removed rows don't linger in
+// the file. Table names are matched without regard to case, and a name
+// matching no table is ignored. Passing no names leaves the database
+// untouched.
+func RestrictToTables(path string, tables []string) (retErr error) {
+	if len(tables) == 0 {
+		return nil
+	}
+
+	d, err := Open(path, false, false)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := d.Close(); err != nil && retErr == nil {
+			retErr = err
+		}
+	}()
+
+	keep := make(map[string]struct{}, len(tables))
+	for _, t := range tables {
+		keep[strings.ToLower(t)] = struct{}{}
+	}
+
+	rows, err := d.QueryStringStmt("SELECT name FROM sqlite_master WHERE type='table'")
+	if err != nil {
+		return err
+	}
+
+	var stmts []*command.Statement
+	for _, r := range rows {
+		if r.GetError() != "" {
+			return fmt.Errorf("read schema: %s", r.GetError())
+		}
+		for _, v := range r.Values {
+			name := v.Parameters[0].GetS()
+			if strings.HasPrefix(strings.ToLower(name), "sqlite_") {
+				// SQLite's own tables are managed by SQLite itself; dropping an
+				// autoincrement table takes its sequence row with it.
+				continue
+			}
+			if _, ok := keep[strings.ToLower(name)]; ok {
+				continue
+			}
+			stmts = append(stmts, &command.Statement{
+				Sql: fmt.Sprintf(`DROP TABLE "%s"`, strings.ReplaceAll(name, `"`, `""`)),
+			})
+		}
+	}
+
+	if len(stmts) > 0 {
+		res, err := d.Execute(&command.Request{Statements: stmts}, false)
+		if err != nil {
+			return err
+		}
+		for _, r := range res {
+			if r.GetError() != "" {
+				return fmt.Errorf("drop table: %s", r.GetError())
+			}
+			if e := r.GetE(); e != nil && e.GetError() != "" {
+				return fmt.Errorf("drop table: %s", e.GetError())
+			}
+		}
+	}
+
+	return d.Vacuum()
+}
+
 // Copy copies the contents of the database to the given database. All other
 // attributes of the given database remain untouched e.g. whether it's an
 // on-disk database, except the database will be placed in DELETE mode.
