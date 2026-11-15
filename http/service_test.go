@@ -98,6 +98,51 @@ func Test_ResponseJSONMarshal(t *testing.T) {
 	if exp, got := `{"results":[{"columns":["id","name"],"types":["int","string"],"values":[["fiona",5]]}]}`, string(b); exp != got {
 		t.Fatalf("Incorrect marshal, exp: %s, got: %s", exp, got)
 	}
+
+	// With vtypes
+	resp = NewResponse()
+	resp.Results.Vtypes = true
+	resp.Results.QueryRows = []*command.QueryRows{{
+		Columns: []string{"data"},
+		Types:   []string{"blob"},
+		Values: []*command.Values{
+			{
+				Parameters: []*command.Parameter{
+					{
+						Value: &command.Parameter_Y{
+							Y: []byte{0xc0, 0xfe},
+						},
+					},
+				},
+			},
+			{
+				Parameters: []*command.Parameter{
+					{
+						Value: &command.Parameter_S{
+							S: "wP4=",
+						},
+					},
+				},
+			},
+		},
+	}}
+	b, err = json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to JSON marshal Response with vtypes: %s", err)
+	}
+	if exp, got := `{"results":[{"columns":["data"],"types":["blob"],"vtypes":[["blob"],["text"]],"values":[["wP4="],["wP4="]]}]}`, string(b); exp != got {
+		t.Fatalf("Incorrect marshal with vtypes, exp: %s, got: %s", exp, got)
+	}
+
+	// With vtypes and associative
+	resp.Results.AssociativeJSON = true
+	b, err = json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to JSON marshal associative Response with vtypes: %s", err)
+	}
+	if exp, got := `{"results":[{"types":{"data":"blob"},"vtypes":[{"data":"blob"},{"data":"text"}],"rows":[{"data":"wP4="},{"data":"wP4="}]}]}`, string(b); exp != got {
+		t.Fatalf("Incorrect marshal with vtypes and associative, exp: %s, got: %s", exp, got)
+	}
 }
 
 func Test_NewService(t *testing.T) {
@@ -3670,5 +3715,93 @@ func Test_ErrorsParam(t *testing.T) {
 	}
 	if got, exp := do("/db/query", q+"&errors=v1", false), `{"results":[{`+v1+`}]}`; got != exp {
 		t.Fatalf("GET /db/query errors=v1: exp %s, got %s", exp, got)
+	}
+}
+
+func Test_VtypesQueryParam(t *testing.T) {
+	queryRows := []*command.QueryRows{
+		{
+			Columns: []string{"data"},
+			Types:   []string{"blob"},
+			Values: []*command.Values{
+				{
+					Parameters: []*command.Parameter{
+						{
+							Value: &command.Parameter_Y{
+								Y: []byte{0xc0, 0xfe},
+							},
+						},
+					},
+				},
+				{
+					Parameters: []*command.Parameter{
+						{
+							Value: &command.Parameter_S{
+								S: "wP4=",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	m := &MockStore{leaderAddr: "foo:1234"}
+	m.queryFn = func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
+		return queryRows, 0, nil
+	}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	do := func(path, query string, post bool) string {
+		t.Helper()
+		var resp *http.Response
+		var err error
+		if post {
+			resp, err = http.Post(host+path+query, "application/json", strings.NewReader(`["SELECT * FROM foo"]`))
+		} else {
+			resp, err = http.Get(host + path + query)
+		}
+		if err != nil {
+			t.Fatalf("%s%s: request failed: %s", path, query, err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s%s: expected StatusOK, got %d", path, query, resp.StatusCode)
+		}
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("%s%s: failed to read body: %s", path, query, err)
+		}
+		return strings.TrimSpace(string(body))
+	}
+
+	// Without the parameter vtypes must be omitted.
+	expNoVtypes := `{"results":[{"columns":["data"],"types":["blob"],"values":[["wP4="],["wP4="]]}]}`
+	if got := do("/db/query", "", true); got != expNoVtypes {
+		t.Fatalf("expected %s, got %s", expNoVtypes, got)
+	}
+
+	// With the parameter per-row value types must be included.
+	expVtypes := `{"results":[{"columns":["data"],"types":["blob"],"vtypes":[["blob"],["text"]],"values":[["wP4="],["wP4="]]}]}`
+	if got := do("/db/query", "?vtypes", true); got != expVtypes {
+		t.Fatalf("expected %s, got %s", expVtypes, got)
+	}
+
+	// GET on /db/query must behave the same as POST.
+	q := "?q=" + url.QueryEscape("SELECT * FROM foo")
+	if got := do("/db/query", q+"&vtypes", false); got != expVtypes {
+		t.Fatalf("GET /db/query with vtypes: expected %s, got %s", expVtypes, got)
+	}
+
+	// Associative form must carry vtypes as maps.
+	expAssoc := `{"results":[{"types":{"data":"blob"},"vtypes":[{"data":"blob"},{"data":"text"}],"rows":[{"data":"wP4="},{"data":"wP4="}]}]}`
+	if got := do("/db/query", "?vtypes&associative", true); got != expAssoc {
+		t.Fatalf("expected %s, got %s", expAssoc, got)
 	}
 }

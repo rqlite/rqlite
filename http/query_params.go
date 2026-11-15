@@ -105,6 +105,11 @@ func (qp QueryParams) BlobArray() bool {
 	return qp.HasKey("blob_array")
 }
 
+// Vtypes returns true if the query parameters request actual value types.
+func (qp QueryParams) Vtypes() bool {
+	return qp.HasKey("vtypes")
+}
+
 // QualifyColumns returns true if the query parameters request table-qualified column names.
 func (qp QueryParams) QualifyColumns() bool {
 	return qp.HasKey("qualify_columns")

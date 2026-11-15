@@ -76,21 +76,23 @@ type Result struct {
 
 // Rows represents the outcome of an operation that returns query data.
 type Rows struct {
-	Columns []string `json:"columns,omitempty"`
-	Types   []string `json:"types,omitempty"`
-	Values  [][]any  `json:"values,omitempty"`
-	Error   string   `json:"error,omitempty"`
-	ErrorV2 *Error   `json:"error_v2,omitempty"`
-	Time    float64  `json:"time,omitempty"`
+	Columns []string   `json:"columns,omitempty"`
+	Types   []string   `json:"types,omitempty"`
+	Vtypes  [][]string `json:"vtypes,omitempty"`
+	Values  [][]any    `json:"values,omitempty"`
+	Error   string     `json:"error,omitempty"`
+	ErrorV2 *Error     `json:"error_v2,omitempty"`
+	Time    float64    `json:"time,omitempty"`
 }
 
 // AssociativeRows represents the outcome of an operation that returns query data.
 type AssociativeRows struct {
-	Types   map[string]string `json:"types,omitempty"`
-	Rows    []map[string]any  `json:"rows"`
-	Error   string            `json:"error,omitempty"`
-	ErrorV2 *Error            `json:"error_v2,omitempty"`
-	Time    float64           `json:"time,omitempty"`
+	Types   map[string]string   `json:"types,omitempty"`
+	Vtypes  []map[string]string `json:"vtypes,omitempty"`
+	Rows    []map[string]any    `json:"rows"`
+	Error   string              `json:"error,omitempty"`
+	ErrorV2 *Error              `json:"error_v2,omitempty"`
+	Time    float64             `json:"time,omitempty"`
 }
 
 // ResultWithRows represents the outcome of an operation that changes rows, but also
@@ -116,11 +118,11 @@ func (b ByteSliceAsArray) MarshalJSON() ([]byte, error) {
 
 // NewResultRowsFromExecuteQueryResponse returns an API object from an
 // ExecuteQueryResponse.
-func NewResultRowsFromExecuteQueryResponse(e *proto.ExecuteQueryResponse, bytesAsArray bool, ef ErrorFormat) (any, error) {
+func NewResultRowsFromExecuteQueryResponse(e *proto.ExecuteQueryResponse, bytesAsArray bool, ef ErrorFormat, vtypes bool) (any, error) {
 	if er := e.GetE(); er != nil {
 		return NewResultFromExecuteResult(er, ef)
 	} else if qr := e.GetQ(); qr != nil {
-		return NewRowsFromQueryRows(qr, bytesAsArray, ef)
+		return NewRowsFromQueryRows(qr, bytesAsArray, ef, vtypes)
 	} else if err := e.GetError(); err != "" {
 		return &ErrorResult{Error: err}, nil
 	}
@@ -129,7 +131,7 @@ func NewResultRowsFromExecuteQueryResponse(e *proto.ExecuteQueryResponse, bytesA
 
 // NewAssociativeResultRowsFromExecuteQueryResponse returns an associative API
 // object from an ExecuteQueryResponse.
-func NewAssociativeResultRowsFromExecuteQueryResponse(e *proto.ExecuteQueryResponse, bytesAsArray bool, ef ErrorFormat) (any, error) {
+func NewAssociativeResultRowsFromExecuteQueryResponse(e *proto.ExecuteQueryResponse, bytesAsArray bool, ef ErrorFormat, vtypes bool) (any, error) {
 	if er := e.GetE(); er != nil {
 		if er.Error != "" {
 			// A failed statement carries only its error. Omit the rows
@@ -148,7 +150,7 @@ func NewAssociativeResultRowsFromExecuteQueryResponse(e *proto.ExecuteQueryRespo
 			Result: *r,
 		}, nil
 	} else if qr := e.GetQ(); qr != nil {
-		return NewAssociativeRowsFromQueryRows(qr, bytesAsArray, ef)
+		return NewAssociativeRowsFromQueryRows(qr, bytesAsArray, ef, vtypes)
 	} else if err := e.GetError(); err != "" {
 		return &ErrorResult{Error: err}, nil
 	}
@@ -199,8 +201,72 @@ func NewResultFromExecuteResult(e *proto.ExecuteResult, ef ErrorFormat) (*Result
 	}, nil
 }
 
+// parameterValueType returns the type of the value contained in the parameter.
+func parameterValueType(p *proto.Parameter) string {
+	if p == nil {
+		return "null"
+	}
+	switch p.GetValue().(type) {
+	case *proto.Parameter_I:
+		return "integer"
+	case *proto.Parameter_D:
+		return "real"
+	case *proto.Parameter_B:
+		return "boolean"
+	case *proto.Parameter_Y:
+		return "blob"
+	case *proto.Parameter_S:
+		return "text"
+	default:
+		return "null"
+	}
+}
+
+// vtypesFromQueryValues returns the value types, row-by-row, for the given values.
+func vtypesFromQueryValues(v []*proto.Values) [][]string {
+	if len(v) == 0 {
+		return nil
+	}
+	vtypes := make([][]string, len(v))
+	for i, vals := range v {
+		params := vals.GetParameters()
+		if params == nil {
+			continue
+		}
+		rowVtypes := make([]string, len(params))
+		for j, p := range params {
+			rowVtypes[j] = parameterValueType(p)
+		}
+		vtypes[i] = rowVtypes
+	}
+	return vtypes
+}
+
+// associativeVtypesFromQueryValues returns the value types, row-by-row, keyed by
+// column name, for the given values.
+func associativeVtypesFromQueryValues(columns []string, v []*proto.Values) []map[string]string {
+	if len(v) == 0 {
+		return nil
+	}
+	vtypes := make([]map[string]string, len(v))
+	for i, vals := range v {
+		params := vals.GetParameters()
+		if params == nil {
+			continue
+		}
+		rowVtypes := make(map[string]string, len(params))
+		for j, p := range params {
+			if j < len(columns) {
+				rowVtypes[columns[j]] = parameterValueType(p)
+			}
+		}
+		vtypes[i] = rowVtypes
+	}
+	return vtypes
+}
+
 // NewRowsFromQueryRows returns an API Rows object from a QueryRows
-func NewRowsFromQueryRows(q *proto.QueryRows, bytesAsArray bool, ef ErrorFormat) (*Rows, error) {
+func NewRowsFromQueryRows(q *proto.QueryRows, bytesAsArray bool, ef ErrorFormat, vtypes bool) (*Rows, error) {
 	if len(q.Columns) != len(q.Types) {
 		return nil, ErrTypesColumnsLengthViolation
 	}
@@ -210,18 +276,22 @@ func NewRowsFromQueryRows(q *proto.QueryRows, bytesAsArray bool, ef ErrorFormat)
 		return nil, err
 	}
 	msg, errV2 := errorFields(q.Error, q.ErrorV2, ef)
-	return &Rows{
+	r := &Rows{
 		Columns: q.Columns,
 		Types:   q.Types,
 		Values:  values,
 		Error:   msg,
 		ErrorV2: errV2,
 		Time:    q.Time,
-	}, nil
+	}
+	if vtypes {
+		r.Vtypes = vtypesFromQueryValues(q.Values)
+	}
+	return r, nil
 }
 
 // NewAssociativeRowsFromQueryRows returns an associative API object from a QueryRows
-func NewAssociativeRowsFromQueryRows(q *proto.QueryRows, bytesAsArray bool, ef ErrorFormat) (*AssociativeRows, error) {
+func NewAssociativeRowsFromQueryRows(q *proto.QueryRows, bytesAsArray bool, ef ErrorFormat, vtypes bool) (*AssociativeRows, error) {
 	if len(q.Columns) != len(q.Types) {
 		return nil, ErrTypesColumnsLengthViolation
 	}
@@ -246,13 +316,17 @@ func NewAssociativeRowsFromQueryRows(q *proto.QueryRows, bytesAsArray bool, ef E
 	}
 
 	msg, errV2 := errorFields(q.Error, q.ErrorV2, ef)
-	return &AssociativeRows{
+	r := &AssociativeRows{
 		Types:   types,
 		Rows:    rows,
 		Error:   msg,
 		ErrorV2: errV2,
 		Time:    q.Time,
-	}, nil
+	}
+	if vtypes {
+		r.Vtypes = associativeVtypesFromQueryValues(q.Columns, q.Values)
+	}
+	return r, nil
 }
 
 // NewValuesFromQueryValues sets Values from a QueryValue object.
@@ -304,6 +378,7 @@ type Encoder struct {
 	Associative       bool
 	BlobsAsByteArrays bool
 	Errors            ErrorFormat
+	Vtypes            bool
 }
 
 // JSONMarshal implements the marshal interface
@@ -340,7 +415,7 @@ func noEscapeEncode(i any) ([]byte, error) {
 type marshalFunc func(i any) ([]byte, error)
 
 func (e *Encoder) marshal(i any, f marshalFunc) ([]byte, error) {
-	assoc, bytesAsArray, ef := e.Associative, e.BlobsAsByteArrays, e.Errors
+	assoc, bytesAsArray, ef, vtypes := e.Associative, e.BlobsAsByteArrays, e.Errors, e.Vtypes
 	switch v := i.(type) {
 	case *proto.ExecuteResult:
 		r, err := NewResultFromExecuteResult(v, ef)
@@ -360,20 +435,20 @@ func (e *Encoder) marshal(i any, f marshalFunc) ([]byte, error) {
 		return f(results)
 	case *proto.QueryRows:
 		if assoc {
-			r, err := NewAssociativeRowsFromQueryRows(v, bytesAsArray, ef)
+			r, err := NewAssociativeRowsFromQueryRows(v, bytesAsArray, ef, vtypes)
 			if err != nil {
 				return nil, err
 			}
 			return f(r)
 		} else {
-			r, err := NewRowsFromQueryRows(v, bytesAsArray, ef)
+			r, err := NewRowsFromQueryRows(v, bytesAsArray, ef, vtypes)
 			if err != nil {
 				return nil, err
 			}
 			return f(r)
 		}
 	case *proto.ExecuteQueryResponse:
-		r, err := NewResultRowsFromExecuteQueryResponse(v, bytesAsArray, ef)
+		r, err := NewResultRowsFromExecuteQueryResponse(v, bytesAsArray, ef, vtypes)
 		if err != nil {
 			return nil, err
 		}
@@ -384,7 +459,7 @@ func (e *Encoder) marshal(i any, f marshalFunc) ([]byte, error) {
 		if assoc {
 			rows := make([]*AssociativeRows, len(v))
 			for j := range v {
-				rows[j], err = NewAssociativeRowsFromQueryRows(v[j], bytesAsArray, ef)
+				rows[j], err = NewAssociativeRowsFromQueryRows(v[j], bytesAsArray, ef, vtypes)
 				if err != nil {
 					return nil, err
 				}
@@ -393,7 +468,7 @@ func (e *Encoder) marshal(i any, f marshalFunc) ([]byte, error) {
 		} else {
 			rows := make([]*Rows, len(v))
 			for j := range v {
-				rows[j], err = NewRowsFromQueryRows(v[j], bytesAsArray, ef)
+				rows[j], err = NewRowsFromQueryRows(v[j], bytesAsArray, ef, vtypes)
 				if err != nil {
 					return nil, err
 				}
@@ -404,7 +479,7 @@ func (e *Encoder) marshal(i any, f marshalFunc) ([]byte, error) {
 		if assoc {
 			res := make([]any, len(v))
 			for j := range v {
-				r, err := NewAssociativeResultRowsFromExecuteQueryResponse(v[j], bytesAsArray, ef)
+				r, err := NewAssociativeResultRowsFromExecuteQueryResponse(v[j], bytesAsArray, ef, vtypes)
 				if err != nil {
 					return nil, err
 				}
@@ -414,7 +489,7 @@ func (e *Encoder) marshal(i any, f marshalFunc) ([]byte, error) {
 		} else {
 			res := make([]any, len(v))
 			for j := range v {
-				r, err := NewResultRowsFromExecuteQueryResponse(v[j], bytesAsArray, ef)
+				r, err := NewResultRowsFromExecuteQueryResponse(v[j], bytesAsArray, ef, vtypes)
 				if err != nil {
 					return nil, err
 				}

@@ -876,3 +876,122 @@ func Test_MarshalErrorFormat_Success(t *testing.T) {
 		}
 	}
 }
+
+func Test_MarshalQueryRows_Vtypes(t *testing.T) {
+	r := &proto.QueryRows{
+		Columns: []string{"data"},
+		Types:   []string{"blob"},
+		Values: []*proto.Values{
+			{
+				Parameters: []*proto.Parameter{
+					{
+						Value: &proto.Parameter_Y{
+							Y: []byte{0xc0, 0xfe},
+						},
+					},
+				},
+			},
+			{
+				Parameters: []*proto.Parameter{
+					{
+						Value: &proto.Parameter_S{
+							S: "wP4=",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Without vtypes: vtypes omitted
+	enc := Encoder{}
+	b, err := enc.JSONMarshal(r)
+	if err != nil {
+		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
+	}
+	if exp, got := `{"columns":["data"],"types":["blob"],"values":[["wP4="],["wP4="]]}`, string(b); exp != got {
+		t.Fatalf("unexpected results without vtypes:\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// With vtypes: vtypes included row-by-row
+	enc = Encoder{Vtypes: true}
+	b, err = enc.JSONMarshal(r)
+	if err != nil {
+		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
+	}
+	if exp, got := `{"columns":["data"],"types":["blob"],"vtypes":[["blob"],["text"]],"values":[["wP4="],["wP4="]]}`, string(b); exp != got {
+		t.Fatalf("unexpected results with vtypes:\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Mixed types: integer, real, boolean, blob, text, null
+	mixed := &proto.QueryRows{
+		Columns: []string{"c_int", "c_real", "c_bool", "c_blob", "c_text", "c_null"},
+		Types:   []string{"any", "any", "any", "any", "any", "any"},
+		Values: []*proto.Values{
+			{
+				Parameters: []*proto.Parameter{
+					{Value: &proto.Parameter_I{I: 42}},
+					{Value: &proto.Parameter_D{D: 3.14}},
+					{Value: &proto.Parameter_B{B: true}},
+					{Value: &proto.Parameter_Y{Y: []byte("raw")}},
+					{Value: &proto.Parameter_S{S: "str"}},
+					nil,
+				},
+			},
+		},
+	}
+	b, err = enc.JSONMarshal(mixed)
+	if err != nil {
+		t.Fatalf("failed to marshal mixed QueryRows: %s", err.Error())
+	}
+	if exp, got := `{"columns":["c_int","c_real","c_bool","c_blob","c_text","c_null"],"types":["any","any","any","any","any","any"],"vtypes":[["integer","real","boolean","blob","text","null"]],"values":[[42,3.14,true,"cmF3","str",null]]}`, string(b); exp != got {
+		t.Fatalf("unexpected results with mixed vtypes:\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_MarshalQueryRows_Vtypes_Associative(t *testing.T) {
+	r := &proto.QueryRows{
+		Columns: []string{"data"},
+		Types:   []string{"blob"},
+		Values: []*proto.Values{
+			{
+				Parameters: []*proto.Parameter{
+					{
+						Value: &proto.Parameter_Y{
+							Y: []byte{0xc0, 0xfe},
+						},
+					},
+				},
+			},
+			{
+				Parameters: []*proto.Parameter{
+					{
+						Value: &proto.Parameter_S{
+							S: "wP4=",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Without vtypes: associative rows without vtypes
+	enc := Encoder{Associative: true}
+	b, err := enc.JSONMarshal(r)
+	if err != nil {
+		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
+	}
+	if exp, got := `{"types":{"data":"blob"},"rows":[{"data":"wP4="},{"data":"wP4="}]}`, string(b); exp != got {
+		t.Fatalf("unexpected results without vtypes:\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// With vtypes: associative rows with vtypes
+	enc = Encoder{Associative: true, Vtypes: true}
+	b, err = enc.JSONMarshal(r)
+	if err != nil {
+		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
+	}
+	if exp, got := `{"types":{"data":"blob"},"vtypes":[{"data":"blob"},{"data":"text"}],"rows":[{"data":"wP4="},{"data":"wP4="}]}`, string(b); exp != got {
+		t.Fatalf("unexpected results with vtypes:\nexp: %s\ngot: %s", exp, got)
+	}
+}

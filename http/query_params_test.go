@@ -42,6 +42,7 @@ func Test_NewQueryParams(t *testing.T) {
 		{"Byte array with associative", "byte_array&associative", QueryParams{"byte_array": "", "associative": ""}, false},
 		{"Requesting Raft Index", "raft_index", QueryParams{"raft_index": ""}, false},
 		{"Qualify columns", "qualify_columns", QueryParams{"qualify_columns": ""}, false},
+		{"Vtypes parameter", "vtypes", QueryParams{"vtypes": ""}, false},
 	}
 
 	for _, tc := range testCases {
@@ -237,5 +238,16 @@ func Test_QueryParams_Errors(t *testing.T) {
 				t.Errorf("expected %v, got %v", tc.expected, got)
 			}
 		})
+	}
+}
+
+func Test_QueryParams_Vtypes(t *testing.T) {
+	qp := QueryParams{}
+	if qp.Vtypes() {
+		t.Errorf("expected false, got true")
+	}
+	qp = QueryParams{"vtypes": ""}
+	if !qp.Vtypes() {
+		t.Errorf("expected true, got false")
 	}
 }

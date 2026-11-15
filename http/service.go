@@ -111,6 +111,7 @@ type DBResults struct {
 	AssociativeJSON bool                 // Render in associative form
 	BlobsAsArrays   bool                 // Render BLOB data as byte arrays
 	Errors          encoding.ErrorFormat // Which error fields to render
+	Vtypes          bool                 // Render actual value types
 }
 
 // Responser is the interface response objects must implement.
@@ -124,6 +125,7 @@ func (d *DBResults) MarshalJSON() ([]byte, error) {
 		Associative:       d.AssociativeJSON,
 		BlobsAsByteArrays: d.BlobsAsArrays,
 		Errors:            d.Errors,
+		Vtypes:            d.Vtypes,
 	}
 
 	if d.QueryRows != nil {
@@ -1531,6 +1533,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 	resp.Results.AssociativeJSON = qp.Associative()
 	resp.Results.BlobsAsArrays = qp.BlobArray()
 	resp.Results.Errors = qp.Errors()
+	resp.Results.Vtypes = qp.Vtypes()
 
 	var stmts []*proto.Statement
 	var err error
@@ -1649,6 +1652,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	resp.Results.AssociativeJSON = qp.Associative()
 	resp.Results.BlobsAsArrays = qp.BlobArray()
 	resp.Results.Errors = qp.Errors()
+	resp.Results.Vtypes = qp.Vtypes()
 
 	qr := &proto.QueryRequest{
 		Request: &proto.Request{
@@ -1726,6 +1730,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 	resp.Results.AssociativeJSON = qp.Associative()
 	resp.Results.BlobsAsArrays = qp.BlobArray()
 	resp.Results.Errors = qp.Errors()
+	resp.Results.Vtypes = qp.Vtypes()
 
 	eqr := &proto.ExecuteQueryRequest{
 		Request: &proto.Request{
