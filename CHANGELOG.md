@@ -1,4 +1,7 @@
 ## v10.7.2 (unreleased)
+### New features
+- [PR #3047](https://github.com/rqlite/rqlite/pull/3047): Support optional `vtypes` query parameter, which returns the actual type of each value on a row-by-row basis. Fixes issue [#1701](https://github.com/rqlite/rqlite/issues/1701).
+
 ### Implementation changes and bug fixes
 - [PR #3041](https://github.com/rqlite/rqlite/pull/3041): Fixes for minor bugs related to CDC high water mark handling, which might have resulted in dropped events if the Leader changed while data remained unsent.
 - [PR #3042](https://github.com/rqlite/rqlite/pull/3042): Reduce Raft timeouts for `store` package testing so CI testing completes faster. Production timeouts remain unchanged.
