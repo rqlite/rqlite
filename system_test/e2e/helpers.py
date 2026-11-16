@@ -16,7 +16,7 @@ import socket
 import sqlite3
 import string
 
-TIMEOUT=20
+TIMEOUT=10
 
 seqRe = re.compile(r"^{'results': \[\], 'sequence_number': \d+}$")
 
