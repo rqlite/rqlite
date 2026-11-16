@@ -12,6 +12,15 @@ Issues are never explicitly assigned to individuals. If you wish to work on issu
 ## Use of Coding Agents
 Coding Agents are fine to use, but any PR that appears to be "AI slop" or generated without any apparent thought by the actual programmer, may be closed without comment. If you open an issue or PR that includes analysis by a Coding Agent please state up front that it is agent-generated.
 
+### What is valuable
+The value of PRs has decreased significantly. Producing code is now cheap, and PRs are a poor signal for understanding. But some things remain valuable.
+- A feature request that explains what value it would deliver and why it is coherent with the existing feature set.
+- A feature request that shows a new potential application of rqlite.
+- A bug report with a clear reproduction scenario, ideally a unit test as filed as a PR that then fails in CI.
+- A bug report from the field. Issues with an actual production use cases are very valuable because it shows you're really using the system.
+
+Specifications are the new thing of value. Providing a PR is often of little value. Anyone can produce a PR now.
+
 ### Judgement still required
 Simply pointing an Agent at a feature request or bug report, and having it generate a PR, is unlikely to be an effective working style. Why? For two reasons:
 - The PR is liable to be quite large. Reviewing a large PR for bugs, code style issues, and coherence with the rest of the codebase, is difficult. A large PR may never be reviewed properly, and therefore never merged. This problem predates Agent-enabled coding.
