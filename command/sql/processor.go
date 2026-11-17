@@ -110,11 +110,13 @@ func ContainsRandom(stmt string) bool {
 	return false
 }
 
-// ContainsReturning returns true if the statement contains a RETURNING clause.
-// The function performs a lower-case comparison so it is up to the caller to
-// ensure the statement is lower-cased.
+// ContainsReturning returns true if the statement may contain a RETURNING
+// clause. It is a cheap check used to decide if a statement needs to be
+// parsed, so it may return true for a statement which turns out not to
+// contain one. The function performs a lower-case comparison so it is up to
+// the caller to ensure the statement is lower-cased.
 func ContainsReturning(stmt string) bool {
-	return strings.Contains(stmt, "returning ")
+	return containsKeyword(stmt, "returning")
 }
 
 // ContainsExplain returns true if the statement contains an EXPLAIN clause.
@@ -122,6 +124,32 @@ func ContainsReturning(stmt string) bool {
 // ensure the statement is lower-cased.
 func ContainsExplain(stmt string) bool {
 	return strings.Contains(stmt, "explain ")
+}
+
+// containsKeyword returns true if keyword appears in the statement as a
+// word of its own, as opposed to being part of a longer name. What follows a
+// keyword need not be a space, it may be any whitespace, a comment, or the
+// start of the next token.
+func containsKeyword(stmt, keyword string) bool {
+	for off := 0; ; {
+		i := strings.Index(stmt[off:], keyword)
+		if i < 0 {
+			return false
+		}
+		start := off + i
+		end := start + len(keyword)
+		if (start == 0 || !isIdentChar(stmt[start-1])) &&
+			(end == len(stmt) || !isIdentChar(stmt[end])) {
+			return true
+		}
+		off = end
+	}
+}
+
+// isIdentChar returns true if c can be part of an unquoted SQL identifier.
+func isIdentChar(c byte) bool {
+	return c == '_' || c == '$' || c >= 0x80 ||
+		(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
 
 // Rewriter rewrites SQL statements.

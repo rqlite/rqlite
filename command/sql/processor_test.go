@@ -188,6 +188,48 @@ func Test_ContainsReturning(t *testing.T) {
 			expected: true,
 		},
 
+		// The keyword need not be followed by a space.
+		{
+			name:     "Contains RETURNING clause - followed by star",
+			stmt:     "delete from table returning*",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - followed by newline",
+			stmt:     "delete from table returning\n*",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - followed by tab",
+			stmt:     "delete from table returning\tcol1",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - followed by parenthesis",
+			stmt:     "delete from table returning(col1)",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - followed by quoted column",
+			stmt:     `delete from table returning"col1"`,
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - followed by comment",
+			stmt:     "delete from table returning/* all */*",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - preceded by parenthesis",
+			stmt:     "insert into table values (1)returning *",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - after a longer name",
+			stmt:     "update table set returning_value = 1 returning*",
+			expected: true,
+		},
+
 		// Test cases where no RETURNING clause is present
 		{
 			name:     "No RETURNING clause - unrelated statement",
@@ -210,6 +252,11 @@ func Test_ContainsReturning(t *testing.T) {
 			name:     "Edge case - case sensitivity",
 			stmt:     "insert into table Returning Col1",
 			expected: false, // Function assumes lower-case input
+		},
+		{
+			name:     "No RETURNING clause - end of longer name",
+			stmt:     "select nonreturning from table",
+			expected: false,
 		},
 		{
 			name:     "Edge case - no trailing space",
@@ -387,12 +434,17 @@ func Test_RETURNING_None(t *testing.T) {
 
 func Test_RETURNING_Some(t *testing.T) {
 	for sql, b := range map[string]bool{
-		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678') RETURNING *`: true,
-		`UPDATE t SET d = 'd1' WHERE d = '' RETURNING *`:                  true,
-		`INSERT INTO "names" VALUES (1, 'bob', 'RETURNING')`:              false,
-		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`:      false,
-		`SELECT title FROM albums ORDER BY RANDOM()`:                      false,
-		`INSERT INTO foo(name, age) VALUES(?, ?)`:                         false,
+		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678') RETURNING *`:  true,
+		`UPDATE t SET d = 'd1' WHERE d = '' RETURNING *`:                   true,
+		`UPDATE t SET d = 'd1' WHERE d = '' RETURNING*`:                    true,
+		"UPDATE t SET d = 'd1' WHERE d = '' RETURNING\n*":                  true,
+		`UPDATE t SET d = 'd1' WHERE d = '' RETURNING(d)`:                  true,
+		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678')RETURNING"id"`: true,
+		`UPDATE t SET returning_value = 1`:                                 false,
+		`INSERT INTO "names" VALUES (1, 'bob', 'RETURNING')`:               false,
+		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`:       false,
+		`SELECT title FROM albums ORDER BY RANDOM()`:                       false,
+		`INSERT INTO foo(name, age) VALUES(?, ?)`:                          false,
 	} {
 
 		stmts := []*proto.Statement{
