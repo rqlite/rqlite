@@ -1,4 +1,4 @@
-## v10.7.3 (unreleased)
+## v10.7.3 (November 17th 2026)
 This release enforces a maximum request size between nodes and fixes some SQL rewriting bugs. The request size limit defaults to 1GB, but is user-configurable at launch time via the `-node-max-request-size` command-line flag. If you are working with datasets approaching 1GB in size and are [loading](https://rqlite.io/docs/guides/backup/#restoring-from-sqlite) them into a cluster, you may need to increase this limit.
 
 ### Implementation changes and bug fixes
