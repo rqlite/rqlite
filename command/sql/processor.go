@@ -37,7 +37,8 @@ func ResetStats() {
 // Process processes the given SQL statements, rewriting them if necessary. If
 // random-rewriting is enabled, calls to the RANDOM() function are replaced with
 // an actual random value. If time-rewriting is enabled, 'now' arguments to the
-// time functions are replaced with the current Julian day, and the keywords
+// time functions are replaced with the current Julian day, as are time values
+// which are omitted and so default to the current time, and the keywords
 // CURRENT_TIMESTAMP, CURRENT_DATE and CURRENT_TIME are replaced with the
 // equivalent datetime(), date() and time() calls on that Julian day. If a statement
 // contains a RETURNING clause, the statement is marked as a query, so that the
@@ -80,34 +81,51 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
 	return nil
 }
 
-// ContainsTime returns true if the statement contains a time-related function
-// or one of the CURRENT_TIMESTAMP, CURRENT_DATE and CURRENT_TIME keywords.
-// The function performs a lower-case comparison so it is up to the caller to
-// ensure the statement is lower-cased.
+// ContainsTime returns true if the statement may contain a call to a
+// time-related function, or one of the CURRENT_TIMESTAMP, CURRENT_DATE and
+// CURRENT_TIME keywords. It is a cheap check used to decide if a statement
+// needs to be parsed, so it may return true for a statement which turns out
+// to contain neither. The function performs a lower-case comparison so it is
+// up to the caller to ensure the statement is lower-cased.
 func ContainsTime(stmt string) bool {
-	// Since this is a simple substring search, it also matches datetime(,
-	// strftime( and current_timestamp.
-	targets := []string{"time(", "date(", "julianday(", "unixepoch(", "timediff(",
-		"current_time", "current_date"}
-	for _, target := range targets {
-		if strings.Contains(stmt, target) {
+	// Since this is a simple substring search, time and date also match
+	// datetime and strftime.
+	for _, name := range []string{"time", "date", "julianday", "unixepoch", "timediff"} {
+		if containsCall(stmt, name) {
 			return true
 		}
 	}
-	return false
+	return strings.Contains(stmt, "current_time") || strings.Contains(stmt, "current_date")
 }
 
-// ContainsRandom returns true if the statement contains a random-related function.
-// The function performs a lower-case comparison so it is up to the caller to
-// ensure the statement is lower-cased.
+// ContainsRandom returns true if the statement may contain a call to a
+// random-related function. It is a cheap check used to decide if a statement
+// needs to be parsed, so it may return true for a statement which turns out
+// not to contain one. The function performs a lower-case comparison so it is
+// up to the caller to ensure the statement is lower-cased.
 func ContainsRandom(stmt string) bool {
-	targets := []string{"random(", "randomblob("}
-	for _, target := range targets {
-		if strings.Contains(stmt, target) {
+	// Since this is a simple substring search, random also matches randomblob.
+	return containsCall(stmt, "random") || containsCall(stmt, "randomblob")
+}
+
+// containsCall returns true if name appears in the statement followed by an
+// opening parenthesis. SQL allows whitespace and comments between a function
+// name and the parenthesis, and allows the name to be quoted, so all of those
+// count as a match.
+func containsCall(stmt, name string) bool {
+	for {
+		i := strings.Index(stmt, name)
+		if i < 0 {
+			return false
+		}
+		stmt = stmt[i+len(name):]
+		rest := strings.TrimLeft(stmt, " \t\r\n\f\"`]")
+		if strings.HasPrefix(rest, "(") ||
+			strings.HasPrefix(rest, "/*") ||
+			strings.HasPrefix(rest, "--") {
 			return true
 		}
 	}
-	return false
 }
 
 // ContainsReturning returns true if the statement contains a RETURNING clause.
@@ -210,28 +228,38 @@ func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) 
 		// If used, ensure the value is same for the duration of the statement
 		jd := julianDayAsNumberLit(rw.nowFn())
 
-		if rw.RewriteTime && len(n.Args) > 0 &&
-			(strings.EqualFold(n.Name.Name, "date") ||
-				strings.EqualFold(n.Name.Name, "time") ||
-				strings.EqualFold(n.Name.Name, "datetime") ||
-				strings.EqualFold(n.Name.Name, "julianday") ||
-				strings.EqualFold(n.Name.Name, "unixepoch")) {
-			if isNow(n.Args[0]) {
+		if rw.RewriteTime && isTimeFunc(n.Name.Name) {
+			// The time value is the first argument. If it is absent SQLite
+			// uses the current time, exactly as if 'now' had been passed.
+			// The same is true if the first argument is the 'subsec'
+			// modifier, which is then kept so it applies to the new value.
+			if len(n.Args) == 0 {
+				n.Args = []sql.Expr{jd}
+			} else if isNow(n.Args[0]) {
 				n.Args[0] = jd
+			} else if isSubsec(n.Args[0]) {
+				n.Args = append([]sql.Expr{jd}, n.Args...)
 			}
 			rw.modified = true
-		} else if rw.RewriteTime && len(n.Args) > 1 &&
+		} else if rw.RewriteTime && len(n.Args) > 0 &&
 			strings.EqualFold(n.Name.Name, "strftime") {
-			if isNow(n.Args[1]) {
+			// The time value follows the format, and is also optional.
+			if len(n.Args) == 1 {
+				n.Args = append(n.Args, jd)
+			} else if isNow(n.Args[1]) {
 				n.Args[1] = jd
+			} else if isSubsec(n.Args[1]) {
+				n.Args = append([]sql.Expr{n.Args[0], jd}, n.Args[1:]...)
 			}
 			rw.modified = true
 		} else if rw.RewriteTime && len(n.Args) > 1 &&
 			strings.EqualFold(n.Name.Name, "timediff") {
-			if isNow(n.Args[0]) {
+			// timediff takes no modifiers, and always returns fractional
+			// seconds, so 'subsec' here simply means the current time.
+			if isNow(n.Args[0]) || isSubsec(n.Args[0]) {
 				n.Args[0] = jd
 			}
-			if isNow(n.Args[1]) {
+			if isNow(n.Args[1]) || isSubsec(n.Args[1]) {
 				n.Args[1] = jd
 			}
 			rw.modified = true
@@ -266,11 +294,32 @@ func (rw *Rewriter) VisitEnd(node sql.Node) (sql.Node, error) {
 	return node, nil
 }
 
+// isTimeFunc returns true if name is a SQLite time function which takes the
+// time value as its first argument.
+func isTimeFunc(name string) bool {
+	for _, fn := range []string{"date", "time", "datetime", "julianday", "unixepoch"} {
+		if strings.EqualFold(name, fn) {
+			return true
+		}
+	}
+	return false
+}
+
 func isNow(e sql.Expr) bool {
+	return isString(e, "now")
+}
+
+// isSubsec returns true if the expression is the 'subsec' modifier. When
+// SQLite finds it in place of a time value, it uses the current time.
+func isSubsec(e sql.Expr) bool {
+	return isString(e, "subsec") || isString(e, "subsecond")
+}
+
+func isString(e sql.Expr, v string) bool {
 	if i, ok := e.(*sql.Ident); ok {
-		return strings.EqualFold(i.Name, "now")
+		return strings.EqualFold(i.Name, v)
 	} else if s, ok := e.(*sql.StringLit); ok {
-		return strings.EqualFold(s.Value, "now")
+		return strings.EqualFold(s.Value, v)
 	}
 	return false
 }

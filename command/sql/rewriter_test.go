@@ -157,6 +157,88 @@ func Test_Rewriter_Time(t *testing.T) {
 			rewriteTime: true,
 			modified:    true,
 		},
+		// A time function called without a time value uses the current time,
+		// as reported in rqlite issue 3054.
+		{
+			in:          `INSERT INTO foo(col1) VALUES (time())`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (time(2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (date())`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (date(2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (datetime())`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (datetime(2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (julianday())`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (julianday(2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (unixepoch())`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (unixepoch(2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (strftime('%s'))`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (strftime('%s', 2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (datetime())`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (datetime())`,
+			rewriteTime: false,
+			modified:    false,
+		},
+		// The 'subsec' modifier in place of a time value also means the
+		// current time.
+		{
+			in:          `INSERT INTO foo(col1) VALUES (unixepoch('subsec'))`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (unixepoch(2440422.500000, 'subsec'))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (datetime('SubSecond', '+1 day'))`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (datetime(2440422.500000, 'SubSecond', '+1 day'))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (strftime('%s', 'subsec'))`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (strftime('%s', 2440422.500000, 'subsec'))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (timediff('subsec', '2026-01-01'))`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (timediff(2440422.500000, '2026-01-01'))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (datetime('now', 'subsec'))`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (datetime(2440422.500000, 'subsec'))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (datetime('2026-01-01', 'subsec'))`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (datetime('2026-01-01', 'subsec'))`,
+			rewriteTime: true,
+			modified:    true,
+		},
 		// CURRENT_TIMESTAMP, CURRENT_DATE and CURRENT_TIME are equivalent to
 		// datetime('now'), date('now') and time('now').
 		{

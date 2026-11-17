@@ -50,6 +50,43 @@ func Test_ContainsTime(t *testing.T) {
 			expected: true,
 		},
 
+		// The parenthesis need not follow the function name directly.
+		{
+			name:     "Contains time function - space before parenthesis",
+			stmt:     "select datetime ('now')",
+			expected: true,
+		},
+		{
+			name:     "Contains time function - newline and tab before parenthesis",
+			stmt:     "select julianday\n\t('now')",
+			expected: true,
+		},
+		{
+			name:     "Contains time function - block comment before parenthesis",
+			stmt:     "select date /* c */ ('now')",
+			expected: true,
+		},
+		{
+			name:     "Contains time function - line comment before parenthesis",
+			stmt:     "select time -- c\n('now')",
+			expected: true,
+		},
+		{
+			name:     "Contains time function - double-quoted name",
+			stmt:     `select "datetime"('now')`,
+			expected: true,
+		},
+		{
+			name:     "Contains time function - bracket-quoted name",
+			stmt:     "select [unixepoch] ()",
+			expected: true,
+		},
+		{
+			name:     "Contains time function - second occurrence is the call",
+			stmt:     "update foo set d = date ()",
+			expected: true,
+		},
+
 		// Test cases where no time-related function is present
 		{
 			name:     "No time function - unrelated function",
@@ -64,6 +101,17 @@ func Test_ContainsTime(t *testing.T) {
 		{
 			name:     "No time function - similar but not exact match",
 			stmt:     "select someotherfunction()",
+			expected: false,
+		},
+
+		{
+			name:     "No time function - update statement",
+			stmt:     "update foo set bar = 1 where id = 2",
+			expected: false,
+		},
+		{
+			name:     "No time function - name followed by other text",
+			stmt:     "select date from foo where (id = 1)",
 			expected: false,
 		},
 
@@ -122,6 +170,28 @@ func Test_ContainsRandom(t *testing.T) {
 		{
 			name:     "Contains random function - randomblob()",
 			stmt:     "select randomblob(16)",
+			expected: true,
+		},
+
+		// The parenthesis need not follow the function name directly.
+		{
+			name:     "Contains random function - space before parenthesis",
+			stmt:     "select random ()",
+			expected: true,
+		},
+		{
+			name:     "Contains random function - newline before parenthesis",
+			stmt:     "select randomblob\n(16)",
+			expected: true,
+		},
+		{
+			name:     "Contains random function - comment before parenthesis",
+			stmt:     "select random /* c */ ()",
+			expected: true,
+		},
+		{
+			name:     "Contains random function - double-quoted name",
+			stmt:     `select "random"()`,
 			expected: true,
 		},
 
@@ -285,6 +355,8 @@ func Test_RANDOM_Rewrites(t *testing.T) {
 		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(-?[0-9]+, 'bob', '123-45-678'\)`,
 		`SELECT title FROM albums ORDER BY RANDOM()`, `SELECT title FROM albums ORDER BY RANDOM\(\)`,
 		`SELECT random()`, `SELECT -?[0-9]+`,
+		`SELECT random ()`, `SELECT -?[0-9]+$`,
+		"SELECT \"random\"\n()", `SELECT -?[0-9]+$`,
 		`CREATE TABLE tbl (col1 TEXT, ts DATETIME DEFAULT CURRENT_TIMESTAMP)`, `CREATE TABLE tbl \(col1 TEXT, ts DATETIME DEFAULT CURRENT_TIMESTAMP\)`,
 	}
 	for i := 0; i < len(testSQLs)-1; i += 2 {
@@ -342,6 +414,15 @@ func Test_Time_Rewrites(t *testing.T) {
 		`INSERT INTO "values" VALUES (julianday("now"))`, `INSERT INTO "values" VALUES \(julianday\([0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES (unixepoch("now"))`, `INSERT INTO "values" VALUES \(unixepoch\([0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES (strftime("%F", "now"))`, `INSERT INTO "values" VALUES \(strftime\("%F", [0-9]+\.[0-9]+\)\)`,
+		`INSERT INTO "values" VALUES (datetime ('now'))`, `INSERT INTO "values" VALUES \(datetime\([0-9]+\.[0-9]+\)\)`,
+		"INSERT INTO \"values\" VALUES (julianday\n\t('now'))", `INSERT INTO "values" VALUES \(julianday\([0-9]+\.[0-9]+\)\)`,
+		`INSERT INTO "values" VALUES (date /* today */ ('now'))`, `INSERT INTO "values" VALUES \(date\([0-9]+\.[0-9]+\)\)`,
+		`INSERT INTO "values" VALUES ("unixepoch"('now'))`, `INSERT INTO "values" VALUES \(unixepoch\([0-9]+\.[0-9]+\)\)`,
+		`INSERT INTO "values" VALUES (unixepoch('subsec'))`, `INSERT INTO "values" VALUES \(unixepoch\([0-9]+\.[0-9]+, 'subsec'\)\)`,
+		`INSERT INTO "values" VALUES (datetime())`, `INSERT INTO "values" VALUES \(datetime\([0-9]+\.[0-9]+\)\)`,
+		`INSERT INTO "values" VALUES (DATE(), time())`, `INSERT INTO "values" VALUES \(DATE\([0-9]+\.[0-9]+\), time\([0-9]+\.[0-9]+\)\)`,
+		`INSERT INTO "values" VALUES (julianday(), unixepoch())`, `INSERT INTO "values" VALUES \(julianday\([0-9]+\.[0-9]+\), unixepoch\([0-9]+\.[0-9]+\)\)`,
+		`INSERT INTO "values" VALUES (strftime('%s'))`, `INSERT INTO "values" VALUES \(strftime\('%s', [0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES (CURRENT_TIMESTAMP)`, `INSERT INTO "values" VALUES \(datetime\([0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES (current_date, CURRENT_TIME)`, `INSERT INTO "values" VALUES \(date\([0-9]+\.[0-9]+\), time\([0-9]+\.[0-9]+\)\)`,
 		`CREATE TABLE tbl (col1 TEXT, ts DATETIME DEFAULT CURRENT_TIMESTAMP)`, `CREATE TABLE tbl \(col1 TEXT, ts DATETIME DEFAULT CURRENT_TIMESTAMP\)`,
