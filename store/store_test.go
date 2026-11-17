@@ -777,6 +777,51 @@ func Test_SingleNodeExecuteQuery(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeRequest_WriteIgnoresDBTimeout tests that a database timeout
+// is not applied to a request which contains a write. Every node must reach
+// the same result when it applies a write, which a timeout can't guarantee.
+func Test_SingleNodeRequest_WriteIgnoresDBTimeout(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`, false, false)
+	if _, _, err := s.Execute(context.Background(), er); err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// A timeout this short has expired by the time the write is applied.
+	eqr := executeQueryRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`SELECT * FROM foo`,
+	}, proto.ConsistencyLevel_WEAK, false, false, false)
+	eqr.Request.DbTimeout = 1
+	r, _, _, err := s.Request(context.Background(), eqr)
+	if err != nil {
+		t.Fatalf("failed to execute request on single node: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// The timeout does apply to a request which only reads.
+	eqr = executeQueryRequestFromString(`SELECT * FROM foo`, proto.ConsistencyLevel_WEAK, false, false, false)
+	eqr.Request.DbTimeout = 1
+	if _, _, _, err := s.Request(context.Background(), eqr); err == nil {
+		t.Fatalf("expected read-only request to time out")
+	}
+}
+
 // Test_SingleNodeExecuteQuery_Linearizable tests that a Store correctly responds to a
 // simple Query request with Linearizable consistency level.
 func Test_SingleNodeExecuteQuery_Linearizable(t *testing.T) {

@@ -1713,6 +1713,13 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 		return nil, 0, 0, err
 	}
 
+	// A database timeout must not be applied to a write. Every node must
+	// reach the same result when it applies a write, and a timeout would let
+	// a slow node fail a write which the other nodes complete.
+	if nRW > 0 {
+		eqr.Request.DbTimeout = 0
+	}
+
 	// Send the request through consensus.
 	b, compressed, err := s.tryCompress(eqr)
 	if err != nil {
