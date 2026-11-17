@@ -49,6 +49,7 @@ const (
 	numBroadcastHWMRequest = "num_broadcast_hwm_req"
 	numHWMUpdateDropped    = "num_hwm_update_dropped"
 	numConnRejected        = "num_conn_rejected"
+	numRequestTooLarge     = "num_request_too_large"
 	numUnauthorizedRequest = "num_unauthorized_req"
 
 	numClientRetries            = "num_client_retries"
@@ -80,6 +81,9 @@ const (
 	// maxConcurrentConns bounds the number of connections the service handles
 	// concurrently, preventing connection floods from spawning unbounded goroutines.
 	maxConcurrentConns = 512
+
+	// MaxRequestSize is the maxiumum request size that may be placed on the wire.
+	MaxRequestSize = 1024 * 1024 * 1024
 )
 
 func init() {
@@ -114,6 +118,7 @@ func ResetStats() {
 	stats.Add(numClientReadTimeouts, 0)
 	stats.Add(numClientWriteTimeouts, 0)
 	stats.Add(numConnRejected, 0)
+	stats.Add(numRequestTooLarge, 0)
 	stats.Add(numUnauthorizedRequest, 0)
 }
 
@@ -505,15 +510,22 @@ func (s *Service) handleConn(conn net.Conn) {
 			return
 		}
 		sz := binary.LittleEndian.Uint64(b[0:])
+		if sz > MaxRequestSize {
+			stats.Add(numRequestTooLarge, 1)
+			conn.Close()
+			return
+		}
 
 		p := make([]byte, sz)
 		if s.connTimeout > 0 {
 			if err := conn.SetReadDeadline(time.Now().Add(s.connTimeout)); err != nil {
+				conn.Close()
 				return
 			}
 		}
 		_, err = io.ReadFull(conn, p)
 		if err != nil {
+			conn.Close()
 			return
 		}
 
