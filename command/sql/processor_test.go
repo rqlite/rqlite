@@ -312,6 +312,8 @@ func Test_RANDOMBLOB_Rewrites(t *testing.T) {
 		`INSERT INTO "names" VALUES (RANDOMBLOB(16))`, `INSERT INTO "names" VALUES \(x'[0-9A-F]{32}'\)`,
 		`INSERT INTO "names" VALUES (RANDOMBLOB(16))`, `INSERT INTO "names" VALUES \(x'[0-9A-F]{32}'\)`,
 		`INSERT INTO "names" VALUES (hex(RANDOMBLOB(16)))`, `INSERT INTO "names" VALUES \(hex\(x'[0-9A-F]{32}'\)\)`,
+		`INSERT INTO "names" VALUES (randomblob(2*4))`, `INSERT INTO "names" VALUES \(x'[0-9A-F]{16}'\)`,
+		`INSERT INTO "names" VALUES (randomblob(8.0))`, `INSERT INTO "names" VALUES \(x'[0-9A-F]{16}'\)`,
 		`INSERT INTO "names" VALUES (lower(hex(RANDOMBLOB(16))))`, `INSERT INTO "names" VALUES \(lower\(hex\(x'[0-9A-F]{32}'\)\)\)`,
 	}
 	for i := 0; i < len(testSQLs)-1; i += 2 {
@@ -328,6 +330,47 @@ func Test_RANDOMBLOB_Rewrites(t *testing.T) {
 		if !match.MatchString(stmts[0].Sql) {
 			t.Fatalf("test %d failed, %s (rewritten as %s ) does not regex-match with %s", i, testSQLs[i], stmts[0].Sql, testSQLs[i+1])
 		}
+	}
+}
+
+// Test_RANDOMBLOB_RewritesParams checks that RANDOMBLOB() is rewritten when
+// its size is supplied by a parameter.
+func Test_RANDOMBLOB_RewritesParams(t *testing.T) {
+	newStmts := func() []*proto.Statement {
+		return []*proto.Statement{
+			{
+				Sql: `INSERT INTO "names" VALUES (?, randomblob(?))`,
+				Parameters: []*proto.Parameter{
+					{Value: &proto.Parameter_I{I: 8}},
+					{Value: &proto.Parameter_I{I: 8}},
+				},
+			},
+		}
+	}
+
+	stmts := newStmts()
+	if err := Process(stmts, true, false); err != nil {
+		t.Fatalf("failed to process: %s", err)
+	}
+	if exp, got := `INSERT INTO "names" VALUES (?, ?)`, stmts[0].Sql; exp != got {
+		t.Fatalf("SQL is wrong, exp: %s, got: %s", exp, got)
+	}
+	if exp, got := int64(8), stmts[0].Parameters[0].GetI(); exp != got {
+		t.Fatalf("parameter which is not a size was changed to %v", stmts[0].Parameters[0].GetValue())
+	}
+	if exp, got := 8, len(stmts[0].Parameters[1].GetY()); exp != got {
+		t.Fatalf("size parameter was not replaced with %d bytes, got %v", exp, stmts[0].Parameters[1].GetValue())
+	}
+
+	stmts = newStmts()
+	if err := Process(stmts, false, false); err != nil {
+		t.Fatalf("failed to process: %s", err)
+	}
+	if exp, got := `INSERT INTO "names" VALUES (?, randomblob(?))`, stmts[0].Sql; exp != got {
+		t.Fatalf("SQL is wrong with random rewriting disabled, exp: %s, got: %s", exp, got)
+	}
+	if exp, got := int64(8), stmts[0].Parameters[1].GetI(); exp != got {
+		t.Fatalf("parameter was changed with random rewriting disabled, got %v", stmts[0].Parameters[1].GetValue())
 	}
 }
 

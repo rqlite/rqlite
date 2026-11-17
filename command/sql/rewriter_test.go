@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/sql"
 )
 
@@ -301,6 +302,236 @@ func Test_Rewriter_SchemaUntouched(t *testing.T) {
 		wantModified := strings.Contains(tt.exp, "2440422")
 		if f != wantModified {
 			t.Fatalf("test %d modified wrong, exp %t, got %t", i, wantModified, f)
+		}
+	}
+}
+
+// Test_Rewriter_RandomBlobSize checks that RANDOMBLOB() is rewritten when its
+// size is not a plain whole number, as reported in rqlite issue 3055.
+func Test_Rewriter_RandomBlobSize(t *testing.T) {
+	for i, tt := range []struct {
+		in  string
+		exp string // Regular expression.
+	}{
+		{in: `SELECT randomblob(8)`, exp: `^SELECT x'[0-9A-F]{16}'$`},
+		{in: `SELECT randomblob(8.0)`, exp: `^SELECT x'[0-9A-F]{16}'$`},
+		{in: `SELECT randomblob(8.9)`, exp: `^SELECT x'[0-9A-F]{16}'$`},
+		{in: `SELECT randomblob(1e1)`, exp: `^SELECT x'[0-9A-F]{20}'$`},
+		{in: `SELECT randomblob(0x10)`, exp: `^SELECT x'[0-9A-F]{32}'$`},
+		{in: `SELECT randomblob(2*4)`, exp: `^SELECT x'[0-9A-F]{16}'$`},
+		{in: `SELECT randomblob(2 * (3 + 1))`, exp: `^SELECT x'[0-9A-F]{16}'$`},
+		{in: `SELECT randomblob(10 - 2)`, exp: `^SELECT x'[0-9A-F]{16}'$`},
+		{in: `SELECT randomblob(7 / 2)`, exp: `^SELECT x'[0-9A-F]{6}'$`},
+		{in: `SELECT randomblob(7 / 2.0)`, exp: `^SELECT x'[0-9A-F]{6}'$`},
+		{in: `SELECT randomblob(7 % 4)`, exp: `^SELECT x'[0-9A-F]{6}'$`},
+		{in: `SELECT randomblob(+8)`, exp: `^SELECT x'[0-9A-F]{16}'$`},
+		// A size of less than 1, or of NULL, results in a single byte.
+		{in: `SELECT randomblob(0)`, exp: `^SELECT x'[0-9A-F]{2}'$`},
+		{in: `SELECT randomblob(-3)`, exp: `^SELECT x'[0-9A-F]{2}'$`},
+		{in: `SELECT randomblob(2 - 5)`, exp: `^SELECT x'[0-9A-F]{2}'$`},
+		{in: `SELECT randomblob(1 / 0)`, exp: `^SELECT x'[0-9A-F]{2}'$`},
+		{in: `SELECT randomblob(1 % 0)`, exp: `^SELECT x'[0-9A-F]{2}'$`},
+		// Too big for SQLite to create, so left for SQLite to reject.
+		{in: `SELECT randomblob(1000000001)`, exp: `^SELECT randomblob\(1000000001\)$`},
+		{in: `SELECT randomblob(1000000 * 1000000)`, exp: `^SELECT randomblob\(1000000 \* 1000000\)$`},
+		{in: `SELECT randomblob(9223372036854775807 + 1)`, exp: `^SELECT randomblob\(9223372036854775807 \+ 1\)$`},
+		// The size can't be known without running the statement.
+		{in: `SELECT randomblob(length(name)) FROM foo`, exp: `^SELECT randomblob\(length\("name"\)\) FROM "foo"$`},
+		{in: `SELECT randomblob(n * 2) FROM foo`, exp: `^SELECT randomblob\("n" \* 2\) FROM "foo"$`},
+	} {
+		rw := NewRewriter()
+		s, err := sql.NewParser(strings.NewReader(tt.in)).ParseStatement()
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, _, _, err = rw.Do(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rendered := s.String(); !regexp.MustCompile(tt.exp).MatchString(rendered) {
+			t.Fatalf("test %d failed, exp: '%s', got: '%s'", i, tt.exp, rendered)
+		}
+	}
+}
+
+// Test_Rewriter_RandomBlobParams checks that RANDOMBLOB() is rewritten when
+// its size is supplied by a parameter.
+func Test_Rewriter_RandomBlobParams(t *testing.T) {
+	num := func(i int64) *proto.Parameter {
+		return &proto.Parameter{Value: &proto.Parameter_I{I: i}}
+	}
+	named := func(n string, i int64) *proto.Parameter {
+		return &proto.Parameter{Value: &proto.Parameter_I{I: i}, Name: n}
+	}
+	str := func(s string) *proto.Parameter {
+		return &proto.Parameter{Value: &proto.Parameter_S{S: s}}
+	}
+	// blob is an expected parameter value, random bytes of the given length.
+	type blob int
+
+	for i, tt := range []struct {
+		in        string
+		params    []*proto.Parameter
+		exp       string // Regular expression.
+		expParams []any  // Expected parameter values, in order.
+		noRewrite bool
+	}{
+		{
+			// The parameter takes the place of the call, and is bound to
+			// the random bytes.
+			in:        `INSERT INTO foo VALUES (randomblob(?))`,
+			params:    []*proto.Parameter{num(8)},
+			exp:       `^INSERT INTO "foo" VALUES \(\?\)$`,
+			expParams: []any{blob(8)},
+		},
+		{
+			in:        `INSERT INTO foo VALUES (randomblob(?))`,
+			params:    []*proto.Parameter{num(8)},
+			exp:       `^INSERT INTO "foo" VALUES \(randomblob\(\?\)\)$`,
+			expParams: []any{int64(8)},
+			noRewrite: true,
+		},
+		{
+			// Other parameters stay bound to the same values.
+			in:        `INSERT INTO foo VALUES (?, hex(randomblob(?)), ?)`,
+			params:    []*proto.Parameter{num(8), num(4), str("x")},
+			exp:       `^INSERT INTO "foo" VALUES \(\?, hex\(\?\), \?\)$`,
+			expParams: []any{int64(8), blob(4), "x"},
+		},
+		{
+			// The size is read the way SQLite would read it.
+			in: `INSERT INTO foo VALUES (randomblob(?), randomblob(?), randomblob(?), randomblob(?), randomblob(?), randomblob(?))`,
+			params: []*proto.Parameter{
+				{Value: &proto.Parameter_D{D: 8.9}},
+				str(" 7abc"),
+				str("abc"),
+				{Value: &proto.Parameter_B{B: true}},
+				{},
+				num(-5),
+			},
+			exp:       `^INSERT INTO "foo" VALUES \(\?, \?, \?, \?, \?, \?\)$`,
+			expParams: []any{blob(8), blob(7), blob(1), blob(1), blob(1), blob(1)},
+		},
+		{
+			// Parameters are numbered in statement order, not in the order
+			// the statement is walked.
+			in:        `INSERT INTO foo VALUES (?, ?) ON CONFLICT DO UPDATE SET a = randomblob(?) WHERE b = ?`,
+			params:    []*proto.Parameter{num(1), num(2), num(3), num(4)},
+			exp:       `SET "a" = \? WHERE "b" = \?$`,
+			expParams: []any{int64(1), int64(2), blob(3), int64(4)},
+		},
+		{
+			in:        `INSERT INTO foo VALUES (randomblob(:n), $m)`,
+			params:    []*proto.Parameter{named("m", 3), named("n", 8)},
+			exp:       `^INSERT INTO "foo" VALUES \(:n, \$m\)$`,
+			expParams: []any{int64(3), blob(8)},
+		},
+		{
+			// A named parameter in the statement bound by position.
+			in:        `INSERT INTO foo VALUES (:a, randomblob(:n))`,
+			params:    []*proto.Parameter{num(3), num(8)},
+			exp:       `^INSERT INTO "foo" VALUES \(:a, :n\)$`,
+			expParams: []any{int64(3), blob(8)},
+		},
+		{
+			// The size is also used as it is, so it must not be changed.
+			// The call is replaced in the statement instead.
+			in:        `INSERT INTO foo VALUES (:n, randomblob(:n))`,
+			params:    []*proto.Parameter{named("n", 8)},
+			exp:       `^INSERT INTO "foo" VALUES \(:n, x'[0-9A-F]{16}'\)$`,
+			expParams: []any{int64(8)},
+		},
+		{
+			in:        `INSERT INTO foo VALUES (?1, randomblob(?1), ?)`,
+			params:    []*proto.Parameter{num(8), num(5)},
+			exp:       `^INSERT INTO "foo" VALUES \(\?1, x'[0-9A-F]{16}', \?\)$`,
+			expParams: []any{int64(8), int64(5)},
+		},
+		{
+			// Each call gets its own bytes. The parameter must remain in
+			// the statement, so it takes the place of the last call.
+			in:        `INSERT INTO foo VALUES (randomblob(?1), randomblob(?1))`,
+			params:    []*proto.Parameter{num(8)},
+			exp:       `^INSERT INTO "foo" VALUES \(x'[0-9A-F]{16}', \?1\)$`,
+			expParams: []any{blob(8)},
+		},
+		{
+			// Replacing the call would renumber the parameters after it,
+			// and so change what the second value is bound to. Left alone.
+			in:        `INSERT INTO foo VALUES (randomblob(:n), ?, :n)`,
+			params:    []*proto.Parameter{named("n", 8), num(5)},
+			exp:       `^INSERT INTO "foo" VALUES \(randomblob\(:n\), \?, :n\)$`,
+			expParams: []any{int64(8), int64(5)},
+		},
+		{
+			// No value is bound to the parameter.
+			in:        `INSERT INTO foo VALUES (randomblob(?))`,
+			params:    nil,
+			exp:       `^INSERT INTO "foo" VALUES \(randomblob\(\?\)\)$`,
+			expParams: []any{},
+		},
+		{
+			// Too big for SQLite to create, so left for SQLite to reject.
+			in:        `INSERT INTO foo VALUES (randomblob(?))`,
+			params:    []*proto.Parameter{num(1000000001)},
+			exp:       `^INSERT INTO "foo" VALUES \(randomblob\(\?\)\)$`,
+			expParams: []any{int64(1000000001)},
+		},
+		{
+			// A parameter as part of an expression is not supported.
+			in:        `INSERT INTO foo VALUES (randomblob(? * 2))`,
+			params:    []*proto.Parameter{num(4)},
+			exp:       `^INSERT INTO "foo" VALUES \(randomblob\(\? \* 2\)\)$`,
+			expParams: []any{int64(4)},
+		},
+		{
+			// Not rewritten in an ORDER BY, as with RANDOM().
+			in:        `SELECT * FROM foo ORDER BY randomblob(?)`,
+			params:    []*proto.Parameter{num(4)},
+			exp:       `ORDER BY randomblob\(\?\)$`,
+			expParams: []any{int64(4)},
+		},
+	} {
+		rw := NewRewriter()
+		rw.RewriteRand = !tt.noRewrite
+		rw.Params = tt.params
+
+		s, err := sql.NewParser(strings.NewReader(tt.in)).ParseStatement()
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, _, _, err = rw.Do(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rendered := s.String(); !regexp.MustCompile(tt.exp).MatchString(rendered) {
+			t.Fatalf("test %d failed, exp: '%s', got: '%s'", i, tt.exp, rendered)
+		}
+
+		if len(tt.params) != len(tt.expParams) {
+			t.Fatalf("test %d has wrong number of expected parameters", i)
+		}
+		for j, p := range tt.params {
+			if n, ok := tt.expParams[j].(blob); ok {
+				y, ok := p.GetValue().(*proto.Parameter_Y)
+				if !ok {
+					t.Fatalf("test %d parameter %d is not a blob, got: %v", i, j, p.GetValue())
+				}
+				if len(y.Y) != int(n) {
+					t.Fatalf("test %d parameter %d wrong length, exp: %d, got: %d", i, j, n, len(y.Y))
+				}
+				continue
+			}
+			var got any
+			switch v := p.GetValue().(type) {
+			case *proto.Parameter_S:
+				got = v.S
+			case *proto.Parameter_I:
+				got = v.I
+			}
+			if got != tt.expParams[j] {
+				t.Fatalf("test %d parameter %d wrong, exp: %v, got: %v", i, j, tt.expParams[j], got)
+			}
 		}
 	}
 }
