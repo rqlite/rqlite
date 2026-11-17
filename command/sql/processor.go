@@ -81,34 +81,51 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
 	return nil
 }
 
-// ContainsTime returns true if the statement contains a time-related function
-// or one of the CURRENT_TIMESTAMP, CURRENT_DATE and CURRENT_TIME keywords.
-// The function performs a lower-case comparison so it is up to the caller to
-// ensure the statement is lower-cased.
+// ContainsTime returns true if the statement may contain a call to a
+// time-related function, or one of the CURRENT_TIMESTAMP, CURRENT_DATE and
+// CURRENT_TIME keywords. It is a cheap check used to decide if a statement
+// needs to be parsed, so it may return true for a statement which turns out
+// to contain neither. The function performs a lower-case comparison so it is
+// up to the caller to ensure the statement is lower-cased.
 func ContainsTime(stmt string) bool {
-	// Since this is a simple substring search, it also matches datetime(,
-	// strftime( and current_timestamp.
-	targets := []string{"time(", "date(", "julianday(", "unixepoch(", "timediff(",
-		"current_time", "current_date"}
-	for _, target := range targets {
-		if strings.Contains(stmt, target) {
+	// Since this is a simple substring search, time and date also match
+	// datetime and strftime.
+	for _, name := range []string{"time", "date", "julianday", "unixepoch", "timediff"} {
+		if containsCall(stmt, name) {
 			return true
 		}
 	}
-	return false
+	return strings.Contains(stmt, "current_time") || strings.Contains(stmt, "current_date")
 }
 
-// ContainsRandom returns true if the statement contains a random-related function.
-// The function performs a lower-case comparison so it is up to the caller to
-// ensure the statement is lower-cased.
+// ContainsRandom returns true if the statement may contain a call to a
+// random-related function. It is a cheap check used to decide if a statement
+// needs to be parsed, so it may return true for a statement which turns out
+// not to contain one. The function performs a lower-case comparison so it is
+// up to the caller to ensure the statement is lower-cased.
 func ContainsRandom(stmt string) bool {
-	targets := []string{"random(", "randomblob("}
-	for _, target := range targets {
-		if strings.Contains(stmt, target) {
+	// Since this is a simple substring search, random also matches randomblob.
+	return containsCall(stmt, "random") || containsCall(stmt, "randomblob")
+}
+
+// containsCall returns true if name appears in the statement followed by an
+// opening parenthesis. SQL allows whitespace and comments between a function
+// name and the parenthesis, and allows the name to be quoted, so all of those
+// count as a match.
+func containsCall(stmt, name string) bool {
+	for {
+		i := strings.Index(stmt, name)
+		if i < 0 {
+			return false
+		}
+		stmt = stmt[i+len(name):]
+		rest := strings.TrimLeft(stmt, " \t\r\n\f\"`]")
+		if strings.HasPrefix(rest, "(") ||
+			strings.HasPrefix(rest, "/*") ||
+			strings.HasPrefix(rest, "--") {
 			return true
 		}
 	}
-	return false
 }
 
 // ContainsReturning returns true if the statement contains a RETURNING clause.
