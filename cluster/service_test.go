@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -38,6 +39,41 @@ func Test_NewServiceOpenClose(t *testing.T) {
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("failed to close cluster service")
+	}
+}
+
+func Test_NewService_RequestTooLarge(t *testing.T) {
+	ml := mustNewMockTransport()
+	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer s.Close()
+
+	// Connect to it.
+	conn, err := net.Dial("tcp", s.Addr())
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	// Create a request just over the limit.
+	var data [8]byte
+	binary.LittleEndian.PutUint64(data[:], uint64(MaxRequestSize+1))
+	_, err = conn.Write(data[:])
+	if err != nil {
+		t.Fatalf("failed to write 8 bytes: %s", err)
+	}
+
+	// Write it.
+	var buf [1]byte
+	_, err = conn.Read(buf[:])
+	if err != io.EOF {
+		t.Fatalf("got unexpected return code for read: %s", err)
 	}
 }
 
