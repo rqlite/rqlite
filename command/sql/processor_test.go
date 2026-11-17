@@ -444,6 +444,47 @@ func Test_Time_Rewrites(t *testing.T) {
 	}
 }
 
+// Test_Time_RewritesParams checks that 'now' supplied as the value of a
+// parameter is replaced, as it is when written in the statement.
+func Test_Time_RewritesParams(t *testing.T) {
+	newStmts := func() []*proto.Statement {
+		return []*proto.Statement{
+			{
+				Sql: `INSERT INTO "values" VALUES (?, datetime(?))`,
+				Parameters: []*proto.Parameter{
+					{Value: &proto.Parameter_S{S: "now"}},
+					{Value: &proto.Parameter_S{S: "now"}},
+				},
+			},
+		}
+	}
+
+	stmts := newStmts()
+	if err := Process(stmts, false, true); err != nil {
+		t.Fatalf("failed to process: %s", err)
+	}
+	if exp, got := `INSERT INTO "values" VALUES (?, datetime(?))`, stmts[0].Sql; exp != got {
+		t.Fatalf("SQL is wrong, exp: %s, got: %s", exp, got)
+	}
+	if exp, got := "now", stmts[0].Parameters[0].GetS(); exp != got {
+		t.Fatalf("parameter which is not a time value was changed to %v", stmts[0].Parameters[0].GetValue())
+	}
+	if _, ok := stmts[0].Parameters[1].GetValue().(*proto.Parameter_D); !ok {
+		t.Fatalf("time value parameter was not rewritten, got %v", stmts[0].Parameters[1].GetValue())
+	}
+	if stmts[0].Parameters[1].GetD() < 2400000 {
+		t.Fatalf("time value parameter is not a Julian day, got %v", stmts[0].Parameters[1].GetD())
+	}
+
+	stmts = newStmts()
+	if err := Process(stmts, false, false); err != nil {
+		t.Fatalf("failed to process: %s", err)
+	}
+	if exp, got := "now", stmts[0].Parameters[1].GetS(); exp != got {
+		t.Fatalf("parameter was changed with time rewriting disabled, got %v", stmts[0].Parameters[1].GetValue())
+	}
+}
+
 func Test_RETURNING_None(t *testing.T) {
 	for _, str := range []string{
 		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678')`,

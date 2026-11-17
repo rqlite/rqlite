@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -38,7 +39,8 @@ func ResetStats() {
 // random-rewriting is enabled, calls to the RANDOM() function are replaced with
 // an actual random value. If time-rewriting is enabled, 'now' arguments to the
 // time functions are replaced with the current Julian day, as are time values
-// which are omitted and so default to the current time, and the keywords
+// which are omitted and so default to the current time. A 'now' supplied as
+// the value of a bound parameter is handled the same way. The keywords
 // CURRENT_TIMESTAMP, CURRENT_DATE and CURRENT_TIME are replaced with the
 // equivalent datetime(), date() and time() calls on that Julian day. If a statement
 // contains a RETURNING clause, the statement is marked as a query, so that the
@@ -67,6 +69,7 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
 		rewriter := NewRewriter()
 		rewriter.RewriteRand = rwrand
 		rewriter.RewriteTime = rwtime
+		rewriter.Params = stmts[i].Parameters
 		rwStmt, rewritten, ret, err := rewriter.Do(parsed)
 		if err != nil {
 			continue
@@ -147,6 +150,16 @@ type Rewriter struct {
 	RewriteRand bool
 	RewriteTime bool
 
+	// Params are the values bound to the parameters of the statement. When
+	// rewriting time, a parameter which supplies 'now' to a time function
+	// has its value changed to the current Julian day.
+	Params []*proto.Parameter
+
+	// nowBinds and subsecBinds are the parameters in the statement which
+	// are to be treated as the literals 'now' and 'subsec' respectively.
+	nowBinds    map[*sql.BindExpr]bool
+	subsecBinds map[*sql.BindExpr]bool
+
 	randFn func() int64
 	nowFn  func() time.Time
 
@@ -172,6 +185,13 @@ func NewRewriter() *Rewriter {
 // clause.
 func (rw *Rewriter) Do(stmt sql.Statement) (sql.Statement, bool, bool, error) {
 	rw.modified = false
+	rw.nowBinds = nil
+	rw.subsecBinds = nil
+	if rw.RewriteTime && len(rw.Params) > 0 {
+		if err := rw.rewriteTimeParams(stmt); err != nil {
+			return nil, false, false, err
+		}
+	}
 	node, err := sql.Walk(rw, stmt)
 	if err != nil {
 		return nil, false, false, err
@@ -235,9 +255,9 @@ func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) 
 			// modifier, which is then kept so it applies to the new value.
 			if len(n.Args) == 0 {
 				n.Args = []sql.Expr{jd}
-			} else if isNow(n.Args[0]) {
+			} else if rw.isNow(n.Args[0]) {
 				n.Args[0] = jd
-			} else if isSubsec(n.Args[0]) {
+			} else if rw.isSubsec(n.Args[0]) {
 				n.Args = append([]sql.Expr{jd}, n.Args...)
 			}
 			rw.modified = true
@@ -246,9 +266,9 @@ func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) 
 			// The time value follows the format, and is also optional.
 			if len(n.Args) == 1 {
 				n.Args = append(n.Args, jd)
-			} else if isNow(n.Args[1]) {
+			} else if rw.isNow(n.Args[1]) {
 				n.Args[1] = jd
-			} else if isSubsec(n.Args[1]) {
+			} else if rw.isSubsec(n.Args[1]) {
 				n.Args = append([]sql.Expr{n.Args[0], jd}, n.Args[1:]...)
 			}
 			rw.modified = true
@@ -256,10 +276,10 @@ func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) 
 			strings.EqualFold(n.Name.Name, "timediff") {
 			// timediff takes no modifiers, and always returns fractional
 			// seconds, so 'subsec' here simply means the current time.
-			if isNow(n.Args[0]) || isSubsec(n.Args[0]) {
+			if rw.isNow(n.Args[0]) || rw.isSubsec(n.Args[0]) {
 				n.Args[0] = jd
 			}
-			if isNow(n.Args[1]) || isSubsec(n.Args[1]) {
+			if rw.isNow(n.Args[1]) || rw.isSubsec(n.Args[1]) {
 				n.Args[1] = jd
 			}
 			rw.modified = true
@@ -303,6 +323,222 @@ func isTimeFunc(name string) bool {
 		}
 	}
 	return false
+}
+
+// isNow returns true if the expression is 'now', or is a parameter which
+// is to be treated as such.
+func (rw *Rewriter) isNow(e sql.Expr) bool {
+	if b, ok := e.(*sql.BindExpr); ok {
+		return rw.nowBinds[b]
+	}
+	return isNow(e)
+}
+
+// isSubsec returns true if the expression is the 'subsec' modifier, or is a
+// parameter which is to be treated as such.
+func (rw *Rewriter) isSubsec(e sql.Expr) bool {
+	if b, ok := e.(*sql.BindExpr); ok {
+		return rw.subsecBinds[b]
+	}
+	return isSubsec(e)
+}
+
+// rewriteTimeParams deals with parameters which supply the time value to a
+// time function, and whose bound value means the current time. Where every
+// use of such a value is as a time value, the bound value itself is changed
+// to the current Julian day, and the statement is left alone. Otherwise the
+// parameters concerned are recorded, so that they are rewritten in the
+// statement as if they were literals.
+func (rw *Rewriter) rewriteTimeParams(stmt sql.Statement) error {
+	c := &bindCollector{
+		timeValues:  make(map[*sql.BindExpr]bool),
+		noModifiers: make(map[*sql.BindExpr]bool),
+	}
+	if _, err := sql.Walk(c, stmt); err != nil {
+		return err
+	}
+	if len(c.timeValues) == 0 {
+		return nil
+	}
+
+	// SQLite numbers parameters in the order they appear in the statement.
+	sort.Slice(c.binds, func(i, j int) bool {
+		return c.binds[i].NamePos.Offset < c.binds[j].NamePos.Offset
+	})
+	indexes := bindIndexes(c.binds, nil)
+
+	// Find the value each parameter in the statement is bound to. Values are
+	// bound in order, each by name if it has one and by its position in the
+	// list if not, so a later value replaces an earlier one.
+	bound := make(map[int]*proto.Parameter)
+	for i, p := range rw.Params {
+		if p.GetName() == "" {
+			bound[i+1] = p
+			continue
+		}
+		for j, b := range c.binds {
+			if !strings.HasPrefix(b.Name, "?") && b.Name[1:] == p.GetName() {
+				bound[indexes[j]] = p
+			}
+		}
+	}
+	uses := make(map[*proto.Parameter][]*sql.BindExpr)
+	for i, b := range c.binds {
+		if p := bound[indexes[i]]; p != nil {
+			uses[p] = append(uses[p], b)
+		}
+	}
+
+	jd, err := strconv.ParseFloat(julianDayAsNumberLit(rw.nowFn()).Value, 64)
+	if err != nil {
+		return err
+	}
+	rw.nowBinds = make(map[*sql.BindExpr]bool)
+	rw.subsecBinds = make(map[*sql.BindExpr]bool)
+	for _, p := range rw.Params {
+		now, subsec := isNowParam(p), isSubsecParam(p)
+		if !now && !subsec {
+			continue
+		}
+
+		var asNow []*sql.BindExpr
+		elsewhere := false
+		for _, b := range uses[p] {
+			if !c.timeValues[b] {
+				elsewhere = true
+			} else if now || c.noModifiers[b] {
+				asNow = append(asNow, b)
+			} else {
+				// The parameter stays in the statement, and the Julian
+				// day is inserted ahead of it.
+				rw.subsecBinds[b] = true
+				elsewhere = true
+			}
+		}
+		if len(asNow) == 0 {
+			continue
+		}
+		if !elsewhere {
+			p.Value = &proto.Parameter_D{D: jd}
+			continue
+		}
+
+		// The value is also needed as it is, so each use of it as a time
+		// value must be replaced in the statement. That is only safe if it
+		// doesn't change the numbering of the parameters which remain.
+		replaced := make(map[*sql.BindExpr]bool, len(rw.nowBinds)+len(asNow))
+		for b := range rw.nowBinds {
+			replaced[b] = true
+		}
+		for _, b := range asNow {
+			replaced[b] = true
+		}
+		if sameInts(indexes, bindIndexes(c.binds, replaced)) {
+			rw.nowBinds = replaced
+		}
+	}
+	return nil
+}
+
+// bindCollector is a sql.Visitor which collects the parameters in a statement,
+// noting which of them supply the time value to a time function.
+type bindCollector struct {
+	binds       []*sql.BindExpr
+	timeValues  map[*sql.BindExpr]bool
+	noModifiers map[*sql.BindExpr]bool // Time values of a function taking no modifiers.
+}
+
+// Visit implements sql.Visitor.
+func (c *bindCollector) Visit(node sql.Node) (sql.Visitor, sql.Node, error) {
+	switch n := node.(type) {
+	case *sql.BindExpr:
+		c.binds = append(c.binds, n)
+	case *sql.Call:
+		var values []sql.Expr
+		if isTimeFunc(n.Name.Name) && len(n.Args) > 0 {
+			values = n.Args[:1]
+		} else if strings.EqualFold(n.Name.Name, "strftime") && len(n.Args) > 1 {
+			values = n.Args[1:2]
+		} else if strings.EqualFold(n.Name.Name, "timediff") && len(n.Args) > 1 {
+			values = n.Args[:2]
+		}
+		for _, v := range values {
+			if b, ok := v.(*sql.BindExpr); ok {
+				c.timeValues[b] = true
+				c.noModifiers[b] = strings.EqualFold(n.Name.Name, "timediff")
+			}
+		}
+	}
+	return c, node, nil
+}
+
+// VisitEnd implements sql.Visitor.
+func (c *bindCollector) VisitEnd(node sql.Node) (sql.Node, error) {
+	return node, nil
+}
+
+// bindIndexes returns the index SQLite assigns to each of the given
+// parameters, which must be in the order they appear in the statement. A
+// parameter in skip is treated as if it were absent, and has an index of 0.
+func bindIndexes(binds []*sql.BindExpr, skip map[*sql.BindExpr]bool) []int {
+	indexes := make([]int, len(binds))
+	named := make(map[string]int)
+	largest := 0
+	for i, b := range binds {
+		if skip[b] {
+			continue
+		}
+		if b.Name == "?" {
+			largest++
+			indexes[i] = largest
+		} else if n, err := strconv.Atoi(b.Name[1:]); err == nil && b.Name[0] == '?' {
+			indexes[i] = n
+			largest = max(largest, n)
+		} else if idx, ok := named[b.Name]; ok {
+			indexes[i] = idx
+		} else {
+			largest++
+			indexes[i] = largest
+			named[b.Name] = largest
+		}
+	}
+	return indexes
+}
+
+// sameInts returns true if every non-zero value in b equals the value at
+// the same position in a.
+func sameInts(a, b []int) bool {
+	for i := range b {
+		if b[i] != 0 && b[i] != a[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// isNowParam returns true if the value of the parameter is 'now'.
+func isNowParam(p *proto.Parameter) bool {
+	v, ok := paramText(p)
+	return ok && strings.EqualFold(v, "now")
+}
+
+// isSubsecParam returns true if the value of the parameter is the 'subsec'
+// modifier.
+func isSubsecParam(p *proto.Parameter) bool {
+	v, ok := paramText(p)
+	return ok && (strings.EqualFold(v, "subsec") || strings.EqualFold(v, "subsecond"))
+}
+
+// paramText returns the value of the parameter if SQLite would read it as
+// text. That includes a blob, which a time function reads as its bytes.
+func paramText(p *proto.Parameter) (string, bool) {
+	switch v := p.GetValue().(type) {
+	case *proto.Parameter_S:
+		return v.S, true
+	case *proto.Parameter_Y:
+		return string(v.Y), true
+	}
+	return "", false
 }
 
 func isNow(e sql.Expr) bool {
