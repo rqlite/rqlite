@@ -50,6 +50,7 @@ const (
 	numHWMUpdateDropped    = "num_hwm_update_dropped"
 	numConnRejected        = "num_conn_rejected"
 	numRequestTooLarge     = "num_request_too_large"
+	numConnShortRead       = "num_conn_short_read"
 	numUnauthorizedRequest = "num_unauthorized_req"
 
 	numClientRetries            = "num_client_retries"
@@ -119,6 +120,7 @@ func ResetStats() {
 	stats.Add(numClientWriteTimeouts, 0)
 	stats.Add(numConnRejected, 0)
 	stats.Add(numRequestTooLarge, 0)
+	stats.Add(numConnShortRead, 0)
 	stats.Add(numUnauthorizedRequest, 0)
 }
 
@@ -516,16 +518,16 @@ func (s *Service) handleConn(conn net.Conn) {
 			return
 		}
 
-		p := make([]byte, sz)
 		if s.connTimeout > 0 {
 			if err := conn.SetReadDeadline(time.Now().Add(s.connTimeout)); err != nil {
 				conn.Close()
 				return
 			}
 		}
-		_, err = io.ReadFull(conn, p)
+		p, err := io.ReadAll(io.LimitReader(conn, int64(sz)))
 		if err != nil {
 			conn.Close()
+			stats.Add(numConnShortRead, 1)
 			return
 		}
 

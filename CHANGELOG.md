@@ -1,3 +1,7 @@
+## v10.7.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #3050](https://github.com/rqlite/rqlite/pull/3050): Cluster service allocates request buffer as data arrives, not upfront.
+
 ## v10.7.2 (November 16th 2026)
 ### Implementation changes and bug fixes
 - [PR #3041](https://github.com/rqlite/rqlite/pull/3041): Fixes for minor bugs related to CDC high water mark handling, which might have resulted in dropped events if the Leader changed while data remained unsent.
