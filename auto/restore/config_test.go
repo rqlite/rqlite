@@ -3,10 +3,13 @@ package restore
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"filippo.io/age"
 	"github.com/rqlite/rqlite/v10/auto"
 	"github.com/rqlite/rqlite/v10/auto/aws"
 	"github.com/rqlite/rqlite/v10/auto/gcp"
@@ -225,6 +228,56 @@ func TestNewStorageClient(t *testing.T) {
 				t.Fatalf("Test case %s failed, expected error %v, got %v", tc.name, tc.expectedErr, err)
 			}
 
+		})
+	}
+}
+
+func TestNewStorageClient_DecryptionKeys(t *testing.T) {
+	identity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherIdentity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name    string
+		keys    string
+		wantErr bool
+	}{
+		{"SingleIdentity", identity.String(), false},
+		{"MultipleIdentities", identity.String() + "\n" + otherIdentity.String(), false},
+		{"InvalidIdentity", identity.String() + "!", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := fmt.Appendf(nil, `{
+				"version": 1,
+				"type": "s3",
+				"decryption_keys": %q,
+				"sub": {
+					"access_key_id": "test_id", "secret_access_key": "test_secret",
+					"region": "us-west-2", "bucket": "test_bucket", "path": "test/path"
+				}
+			}`, tc.keys)
+
+			cfg, _, err := NewStorageClient(input)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected invalid decryption_keys to be rejected when loading config")
+				}
+				if strings.Contains(err.Error(), identity.String()) {
+					t.Fatal("error contains private key material")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.DecryptionKeys != tc.keys {
+				t.Fatal("decryption_keys do not match configured identities")
+			}
 		})
 	}
 }

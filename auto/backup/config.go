@@ -2,9 +2,12 @@ package backup
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"strings"
 
+	"filippo.io/age"
 	"github.com/rqlite/rqlite/v10/auto"
 	"github.com/rqlite/rqlite/v10/auto/aws"
 	"github.com/rqlite/rqlite/v10/auto/file"
@@ -13,13 +16,14 @@ import (
 
 // Config is the config file format for the upload service
 type Config struct {
-	Version    int              `json:"version"`
-	Type       auto.StorageType `json:"type"`
-	NoCompress bool             `json:"no_compress,omitempty"`
-	Timestamp  bool             `json:"timestamp"`
-	Vacuum     bool             `json:"vacuum,omitempty"`
-	Interval   auto.Duration    `json:"interval"`
-	Sub        json.RawMessage  `json:"sub"`
+	Version       int              `json:"version"`
+	Type          auto.StorageType `json:"type"`
+	NoCompress    bool             `json:"no_compress,omitempty"`
+	Timestamp     bool             `json:"timestamp"`
+	Vacuum        bool             `json:"vacuum,omitempty"`
+	Interval      auto.Duration    `json:"interval"`
+	Sub           json.RawMessage  `json:"sub"`
+	EncryptionKey string           `json:"encryption_key,omitempty"`
 }
 
 // NewStorageClient unmarshals the config data and returns the Config and StorageClient.
@@ -32,6 +36,16 @@ func NewStorageClient(data []byte) (*Config, StorageClient, error) {
 
 	if cfg.Version > auto.Version {
 		return nil, nil, auto.ErrInvalidVersion
+	}
+
+	if cfg.EncryptionKey != "" {
+		recipients, err := age.ParseRecipients(strings.NewReader(cfg.EncryptionKey))
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid encryption_key: failed to parse age recipients: %w", err)
+		}
+		if len(recipients) != 1 {
+			return nil, nil, fmt.Errorf("encryption_key must contain exactly one age recipient")
+		}
 	}
 
 	var sc StorageClient

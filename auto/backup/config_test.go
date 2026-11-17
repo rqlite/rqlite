@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"filippo.io/age"
 	"github.com/rqlite/rqlite/v10/auto"
 	"github.com/rqlite/rqlite/v10/auto/aws"
 	"github.com/rqlite/rqlite/v10/auto/file"
@@ -437,6 +438,51 @@ func Test_NewStorageClient(t *testing.T) {
 
 			if !compareConfig(cfg, tc.expectedCfg) {
 				t.Fatalf("Test case %s failed, expected config %+v, got %+v", tc.name, tc.expectedCfg, cfg)
+			}
+		})
+	}
+}
+
+func Test_NewStorageClient_EncryptionKey(t *testing.T) {
+	identity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherIdentity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name    string
+		key     string
+		wantErr bool
+	}{
+		{"ValidEncryptionKey", identity.Recipient().String(), false},
+		{"InvalidEncryptionKey", "not-an-age-key", true},
+		{"MultipleEncryptionKeys", identity.Recipient().String() + "\n" + otherIdentity.Recipient().String(), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := fmt.Appendf(nil, `{
+				"version": 1,
+				"type": "file",
+				"interval": "1h",
+				"encryption_key": %q,
+				"sub": {"dir": %q, "name": "backup.age"}
+			}`, tc.key, t.TempDir())
+
+			cfg, _, err := NewStorageClient(input)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected invalid encryption_key to be rejected when loading config")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.EncryptionKey != tc.key {
+				t.Fatalf("encryption_key = %q, want %q", cfg.EncryptionKey, tc.key)
 			}
 		})
 	}

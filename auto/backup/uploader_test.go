@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"expvar"
 	"fmt"
@@ -9,6 +10,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"filippo.io/age"
+	"github.com/rqlite/rqlite/v10/auto/crypto"
 )
 
 func Test_NewUploader(t *testing.T) {
@@ -62,6 +66,72 @@ func Test_UploaderSingleUpload(t *testing.T) {
 
 	if got, exp := stats.Get(numUploadsOK).(*expvar.Int).Value(), int64(1); got != exp {
 		t.Fatalf("expected numUploadsOK to be %d, got %d", exp, got)
+	}
+}
+
+func Test_UploaderEncryptedUpload(t *testing.T) {
+	identity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const plaintext = "my upload data"
+
+	for _, tc := range []struct {
+		name      string
+		encrypted bool
+	}{
+		{"disabled", false},
+		{"enabled", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ResetStats()
+			var uploadedData []byte
+			sc := &mockStorageClient{
+				currentIDFn: func(context.Context) (string, error) { return "", nil },
+				uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
+					var err error
+					uploadedData, err = io.ReadAll(reader)
+					return err
+				},
+			}
+			dp := &mockDataProvider{data: plaintext}
+			uploader := NewUploader(sc, dp, time.Second)
+			if tc.encrypted {
+				uploader.SetEncryptionKey(identity.Recipient().String())
+			}
+			if err := uploader.upload(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+
+			status, err := uploader.Stats()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := status["encrypted"]; got != tc.encrypted {
+				t.Errorf("encrypted status = %v, want %v", got, tc.encrypted)
+			}
+
+			if !tc.encrypted {
+				if string(uploadedData) != plaintext {
+					t.Fatal("unencrypted upload does not match plaintext")
+				}
+				return
+			}
+			if bytes.Equal(uploadedData, []byte(plaintext)) {
+				t.Fatal("encrypted upload contains unencrypted plaintext")
+			}
+			r, err := crypto.NewDecryptReader(bytes.NewReader(uploadedData), identity.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			decrypted, err := io.ReadAll(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(decrypted) != plaintext {
+				t.Fatal("decrypted upload does not match plaintext")
+			}
+		})
 	}
 }
 

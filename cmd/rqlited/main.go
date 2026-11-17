@@ -348,6 +348,7 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*back
 	}
 	provider := store.NewProvider(str, uCfg.Vacuum, !uCfg.NoCompress)
 	u := backup.NewUploader(sc, provider, time.Duration(uCfg.Interval))
+	u.SetEncryptionKey(uCfg.EncryptionKey)
 	u.Start(ctx, str.IsLeader)
 	return u, nil
 }
