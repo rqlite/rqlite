@@ -201,6 +201,44 @@ func Test_Rewriter_Time(t *testing.T) {
 			rewriteTime: false,
 			modified:    false,
 		},
+		// The 'subsec' modifier in place of a time value also means the
+		// current time.
+		{
+			in:          `INSERT INTO foo(col1) VALUES (unixepoch('subsec'))`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (unixepoch(2440422.500000, 'subsec'))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (datetime('SubSecond', '+1 day'))`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (datetime(2440422.500000, 'SubSecond', '+1 day'))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (strftime('%s', 'subsec'))`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (strftime('%s', 2440422.500000, 'subsec'))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (timediff('subsec', '2026-01-01'))`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (timediff(2440422.500000, '2026-01-01'))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (datetime('now', 'subsec'))`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (datetime(2440422.500000, 'subsec'))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (datetime('2026-01-01', 'subsec'))`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (datetime('2026-01-01', 'subsec'))`,
+			rewriteTime: true,
+			modified:    true,
+		},
 		// CURRENT_TIMESTAMP, CURRENT_DATE and CURRENT_TIME are equivalent to
 		// datetime('now'), date('now') and time('now').
 		{

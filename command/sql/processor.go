@@ -231,10 +231,14 @@ func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) 
 		if rw.RewriteTime && isTimeFunc(n.Name.Name) {
 			// The time value is the first argument. If it is absent SQLite
 			// uses the current time, exactly as if 'now' had been passed.
+			// The same is true if the first argument is the 'subsec'
+			// modifier, which is then kept so it applies to the new value.
 			if len(n.Args) == 0 {
 				n.Args = []sql.Expr{jd}
 			} else if isNow(n.Args[0]) {
 				n.Args[0] = jd
+			} else if isSubsec(n.Args[0]) {
+				n.Args = append([]sql.Expr{jd}, n.Args...)
 			}
 			rw.modified = true
 		} else if rw.RewriteTime && len(n.Args) > 0 &&
@@ -244,14 +248,18 @@ func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) 
 				n.Args = append(n.Args, jd)
 			} else if isNow(n.Args[1]) {
 				n.Args[1] = jd
+			} else if isSubsec(n.Args[1]) {
+				n.Args = append([]sql.Expr{n.Args[0], jd}, n.Args[1:]...)
 			}
 			rw.modified = true
 		} else if rw.RewriteTime && len(n.Args) > 1 &&
 			strings.EqualFold(n.Name.Name, "timediff") {
-			if isNow(n.Args[0]) {
+			// timediff takes no modifiers, and always returns fractional
+			// seconds, so 'subsec' here simply means the current time.
+			if isNow(n.Args[0]) || isSubsec(n.Args[0]) {
 				n.Args[0] = jd
 			}
-			if isNow(n.Args[1]) {
+			if isNow(n.Args[1]) || isSubsec(n.Args[1]) {
 				n.Args[1] = jd
 			}
 			rw.modified = true
@@ -298,10 +306,20 @@ func isTimeFunc(name string) bool {
 }
 
 func isNow(e sql.Expr) bool {
+	return isString(e, "now")
+}
+
+// isSubsec returns true if the expression is the 'subsec' modifier. When
+// SQLite finds it in place of a time value, it uses the current time.
+func isSubsec(e sql.Expr) bool {
+	return isString(e, "subsec") || isString(e, "subsecond")
+}
+
+func isString(e sql.Expr, v string) bool {
 	if i, ok := e.(*sql.Ident); ok {
-		return strings.EqualFold(i.Name, "now")
+		return strings.EqualFold(i.Name, v)
 	} else if s, ok := e.(*sql.StringLit); ok {
-		return strings.EqualFold(s.Value, "now")
+		return strings.EqualFold(s.Value, v)
 	}
 	return false
 }

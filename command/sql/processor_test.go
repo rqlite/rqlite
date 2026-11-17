@@ -418,6 +418,7 @@ func Test_Time_Rewrites(t *testing.T) {
 		"INSERT INTO \"values\" VALUES (julianday\n\t('now'))", `INSERT INTO "values" VALUES \(julianday\([0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES (date /* today */ ('now'))`, `INSERT INTO "values" VALUES \(date\([0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES ("unixepoch"('now'))`, `INSERT INTO "values" VALUES \(unixepoch\([0-9]+\.[0-9]+\)\)`,
+		`INSERT INTO "values" VALUES (unixepoch('subsec'))`, `INSERT INTO "values" VALUES \(unixepoch\([0-9]+\.[0-9]+, 'subsec'\)\)`,
 		`INSERT INTO "values" VALUES (datetime())`, `INSERT INTO "values" VALUES \(datetime\([0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES (DATE(), time())`, `INSERT INTO "values" VALUES \(DATE\([0-9]+\.[0-9]+\), time\([0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES (julianday(), unixepoch())`, `INSERT INTO "values" VALUES \(julianday\([0-9]+\.[0-9]+\), unixepoch\([0-9]+\.[0-9]+\)\)`,
