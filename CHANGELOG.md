@@ -1,5 +1,5 @@
 ## v10.7.3 (unreleased)
-This release enforces a maximum request size between nodes. The size limit defaults to 1GB, but is user-configurable at launch time via the `-node-max-request-size` command-line flag. If you are working with datasets approaching 1GB in size and are [loading](https://rqlite.io/docs/guides/backup/#restoring-from-sqlite) them into a cluster, you may need to increase this limit.
+This release enforces a maximum request size between nodes and fixes some SQL rewriting bugs. The request size limit defaults to 1GB, but is user-configurable at launch time via the `-node-max-request-size` command-line flag. If you are working with datasets approaching 1GB in size and are [loading](https://rqlite.io/docs/guides/backup/#restoring-from-sqlite) them into a cluster, you may need to increase this limit.
 
 ### Implementation changes and bug fixes
 - [PR #3050](https://github.com/rqlite/rqlite/pull/3050): Cluster service allocates request buffer as data arrives, not upfront.
