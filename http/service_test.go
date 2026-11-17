@@ -1775,22 +1775,22 @@ func Test_DBTimeoutQueryParam(t *testing.T) {
 	}{
 		{
 			name: "1s",
-			url:  "http://localhost:4001/execute?db_timeout=1s",
+			url:  "http://localhost:4001/db/query?db_timeout=1s",
 			want: 1 * time.Second,
 		},
 		{
 			name: "100ms",
-			url:  "http://localhost:4001/execute?db_timeout=100ms",
+			url:  "http://localhost:4001/db/query?db_timeout=100ms",
 			want: 100 * time.Millisecond,
 		},
 		{
 			name: "default value",
-			url:  "http://localhost:4001/execute",
+			url:  "http://localhost:4001/db/query",
 			want: 0,
 		},
 		{
 			name:    "parse error",
-			url:     "http://localhost:4001/execute?db_timeout=xyz",
+			url:     "http://localhost:4001/db/query?db_timeout=xyz",
 			wantErr: true,
 		},
 	}
@@ -1814,6 +1814,55 @@ func Test_DBTimeoutQueryParam(t *testing.T) {
 				t.Fatalf("want %d, got %d", tt.want, got)
 			}
 		})
+	}
+}
+
+// Test_DBTimeoutQueriesOnly tests that a database timeout set in the URL is
+// passed on for queries, but is never set on an execute request.
+func Test_DBTimeoutQueriesOnly(t *testing.T) {
+	var executeTimeout, queryTimeout, requestTimeout int64 = -1, -1, -1
+	m := &MockStore{}
+	m.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+		executeTimeout = er.Request.DbTimeout
+		return nil, 0, nil
+	}
+	m.queryFn = func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
+		queryTimeout = qr.Request.DbTimeout
+		return nil, 0, nil
+	}
+	m.requestFn = func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+		requestTimeout = eqr.Request.DbTimeout
+		return nil, 0, 0, nil
+	}
+	c := &mockClusterService{}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	for _, path := range []string{"/db/execute", "/db/query", "/db/request"} {
+		resp, err := http.Post(host+path+"?db_timeout=1s", "application/json", strings.NewReader(`["Some SQL"]`))
+		if err != nil {
+			t.Fatalf("failed to make request to %s: %s", path, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("failed to get expected StatusOK for %s, got %d", path, resp.StatusCode)
+		}
+	}
+
+	if exp, got := int64(0), executeTimeout; exp != got {
+		t.Fatalf("execute request has wrong timeout, exp %d, got %d", exp, got)
+	}
+	if exp, got := time.Second.Nanoseconds(), queryTimeout; exp != got {
+		t.Fatalf("query request has wrong timeout, exp %d, got %d", exp, got)
+	}
+	// Whether a unified request contains a write is for the Store to decide.
+	if exp, got := time.Second.Nanoseconds(), requestTimeout; exp != got {
+		t.Fatalf("unified request has wrong timeout, exp %d, got %d", exp, got)
 	}
 }
 

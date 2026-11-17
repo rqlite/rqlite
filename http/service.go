@@ -1560,10 +1560,12 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		}
 	}
 
+	// No database timeout is set, even if one was requested. Every node must
+	// reach the same result when it applies a write, and a timeout would let
+	// a slow node fail a write which the other nodes complete.
 	er := &proto.ExecuteRequest{
 		Request: &proto.Request{
 			Transaction: qp.Tx(),
-			DbTimeout:   int64(qp.DBTimeout(0)),
 			Statements:  stmts,
 		},
 		Timings: qp.Timings(),
