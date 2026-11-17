@@ -63,7 +63,7 @@ func Test_NewService_RequestTooLarge(t *testing.T) {
 
 	// Create a request just over the limit.
 	var data [8]byte
-	binary.LittleEndian.PutUint64(data[:], uint64(MaxRequestSize+1))
+	binary.LittleEndian.PutUint64(data[:], uint64(DefaultMaxRequestSize+1))
 	_, err = conn.Write(data[:])
 	if err != nil {
 		t.Fatalf("failed to write 8 bytes: %s", err)

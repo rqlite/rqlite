@@ -54,6 +54,8 @@ type Config struct {
 	RaftAddr string
 	// Advertised Raft communication address. If not set, same as Raft bind address
 	RaftAdv string
+	// Maximum size in bytes of internode request
+	NodeMaxRequestSize int
 	// Comma-delimited list of nodes, in host:port form, through which a cluster can be joined
 	JoinAddrs string
 	// Number of join attempts to make
@@ -182,6 +184,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.NodeVerifyCommonName, "node-verify-common-name", "", "Required Common Name on incoming peer certificates. If not set, no Common Name required")
 	fs.StringVar(&config.RaftAddr, "raft-addr", "localhost:4002", "Raft communication bind address")
 	fs.StringVar(&config.RaftAdv, "raft-adv-addr", "", "Advertised Raft communication address. If not set, same as Raft bind address")
+	fs.IntVar(&config.NodeMaxRequestSize, "node-max-request-size", 1073741824, "Maximum size in bytes of internode request")
 	fs.StringVar(&config.JoinAddrs, "join", "", "Comma-delimited list of nodes, in host:port form, through which a cluster can be joined")
 	fs.IntVar(&config.JoinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	fs.DurationVar(&config.JoinInterval, "join-interval", mustParseDuration("3s"), "Period between join attempts")
