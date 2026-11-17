@@ -6,6 +6,7 @@ This release enforces a maximum request size between nodes. The size limit defau
 - [PR #3049](https://github.com/rqlite/rqlite/pull/3049): Limit internode request size to 1GB. Fixes issue [#2619](https://github.com/rqlite/rqlite/issues/2619)
 - [PR #3052](https://github.com/rqlite/rqlite/pull/3052): Support user-configurable maximum internode request size.
 - [PR #3056](https://github.com/rqlite/rqlite/pull/3056): Rewrite time functions which default to the current time, such as `datetime()` and `unixepoch('subsec')`. Fixes issue [#3054](https://github.com/rqlite/rqlite/issues/3054). Thanks @clarkmcc
+- [PR #XXXX](https://github.com/rqlite/rqlite/pull/XXXX): Do not apply `db_timeout` to writes, which could result in a slow node failing a write that other nodes completed. Fixes issue [#3053](https://github.com/rqlite/rqlite/issues/3053).
 
 ## v10.7.2 (November 16th 2026)
 ### Implementation changes and bug fixes
