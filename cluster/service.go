@@ -506,13 +506,12 @@ func (s *Service) handleConn(conn net.Conn) {
 		}
 		sz := binary.LittleEndian.Uint64(b[0:])
 
-		p := make([]byte, sz)
 		if s.connTimeout > 0 {
 			if err := conn.SetReadDeadline(time.Now().Add(s.connTimeout)); err != nil {
 				return
 			}
 		}
-		_, err = io.ReadFull(conn, p)
+		p, err := io.ReadAll(io.LimitReader(conn, int64(sz)))
 		if err != nil {
 			return
 		}
