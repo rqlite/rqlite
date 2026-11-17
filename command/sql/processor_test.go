@@ -188,6 +188,48 @@ func Test_ContainsReturning(t *testing.T) {
 			expected: true,
 		},
 
+		// The keyword need not be followed by a space.
+		{
+			name:     "Contains RETURNING clause - followed by star",
+			stmt:     "delete from table returning*",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - followed by newline",
+			stmt:     "delete from table returning\n*",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - followed by tab",
+			stmt:     "delete from table returning\tcol1",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - followed by parenthesis",
+			stmt:     "delete from table returning(col1)",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - followed by quoted column",
+			stmt:     `delete from table returning"col1"`,
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - followed by comment",
+			stmt:     "delete from table returning/* all */*",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - preceded by parenthesis",
+			stmt:     "insert into table values (1)returning *",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - after a longer name",
+			stmt:     "update table set returning_value = 1 returning*",
+			expected: true,
+		},
+
 		// Test cases where no RETURNING clause is present
 		{
 			name:     "No RETURNING clause - unrelated statement",
@@ -212,6 +254,11 @@ func Test_ContainsReturning(t *testing.T) {
 			expected: false, // Function assumes lower-case input
 		},
 		{
+			name:     "No RETURNING clause - end of longer name",
+			stmt:     "select nonreturning from table",
+			expected: false,
+		},
+		{
 			name:     "Edge case - no trailing space",
 			stmt:     "some text containing returninglike",
 			expected: false,
@@ -225,6 +272,99 @@ func Test_ContainsReturning(t *testing.T) {
 				t.Errorf("ContainsReturning(%q) = %v; want %v", tt.stmt, result, tt.expected)
 			}
 		})
+	}
+}
+
+func Test_ContainsExplain(t *testing.T) {
+	tests := []struct {
+		name     string
+		stmt     string
+		expected bool
+	}{
+		{
+			name:     "Contains EXPLAIN - followed by space",
+			stmt:     "explain select * from foo",
+			expected: true,
+		},
+		{
+			name:     "Contains EXPLAIN - query plan",
+			stmt:     "explain query plan select * from foo",
+			expected: true,
+		},
+		{
+			name:     "Contains EXPLAIN - followed by newline",
+			stmt:     "explain\nselect * from foo",
+			expected: true,
+		},
+		{
+			name:     "Contains EXPLAIN - followed by tab",
+			stmt:     "explain\tselect * from foo",
+			expected: true,
+		},
+		{
+			name:     "Contains EXPLAIN - followed by comment",
+			stmt:     "explain/* why */select * from foo",
+			expected: true,
+		},
+		{
+			name:     "Contains EXPLAIN - preceded by comment",
+			stmt:     "/* why */explain select * from foo",
+			expected: true,
+		},
+		{
+			name:     "No EXPLAIN - unrelated statement",
+			stmt:     "select * from foo",
+			expected: false,
+		},
+		{
+			name:     "No EXPLAIN - empty statement",
+			stmt:     "",
+			expected: false,
+		},
+		{
+			name:     "No EXPLAIN - part of longer name",
+			stmt:     "select explained, explain_text, unexplain from foo",
+			expected: false,
+		},
+		{
+			name:     "Edge case - case sensitivity",
+			stmt:     "Explain select * from foo",
+			expected: false, // Function assumes lower-case input
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ContainsExplain(tt.stmt)
+			if result != tt.expected {
+				t.Errorf("ContainsExplain(%q) = %v; want %v", tt.stmt, result, tt.expected)
+			}
+		})
+	}
+}
+
+func Test_EXPLAIN(t *testing.T) {
+	for sql, b := range map[string]bool{
+		`EXPLAIN SELECT * FROM foo`:                 true,
+		`EXPLAIN QUERY PLAN SELECT * FROM foo`:      true,
+		"EXPLAIN\nSELECT * FROM foo":                true,
+		"EXPLAIN\tQUERY PLAN\nSELECT * FROM foo":    true,
+		`EXPLAIN/* why */SELECT * FROM foo`:         true,
+		`SELECT * FROM foo`:                         false,
+		`SELECT explain_text FROM foo`:              false,
+		`INSERT INTO foo VALUES ('EXPLAIN SELECT')`: false,
+	} {
+		stmts := []*proto.Statement{
+			{
+				Sql: sql,
+			},
+		}
+		if err := Process(stmts, false, false); err != nil {
+			t.Fatalf("failed to process: %s", err)
+		}
+		if exp, got := b, stmts[0].SqlExplain; exp != got {
+			t.Fatalf(`expected %v for SQL "%s", but got %v`, exp, sql, got)
+		}
 	}
 }
 
@@ -387,12 +527,17 @@ func Test_RETURNING_None(t *testing.T) {
 
 func Test_RETURNING_Some(t *testing.T) {
 	for sql, b := range map[string]bool{
-		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678') RETURNING *`: true,
-		`UPDATE t SET d = 'd1' WHERE d = '' RETURNING *`:                  true,
-		`INSERT INTO "names" VALUES (1, 'bob', 'RETURNING')`:              false,
-		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`:      false,
-		`SELECT title FROM albums ORDER BY RANDOM()`:                      false,
-		`INSERT INTO foo(name, age) VALUES(?, ?)`:                         false,
+		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678') RETURNING *`:  true,
+		`UPDATE t SET d = 'd1' WHERE d = '' RETURNING *`:                   true,
+		`UPDATE t SET d = 'd1' WHERE d = '' RETURNING*`:                    true,
+		"UPDATE t SET d = 'd1' WHERE d = '' RETURNING\n*":                  true,
+		`UPDATE t SET d = 'd1' WHERE d = '' RETURNING(d)`:                  true,
+		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678')RETURNING"id"`: true,
+		`UPDATE t SET returning_value = 1`:                                 false,
+		`INSERT INTO "names" VALUES (1, 'bob', 'RETURNING')`:               false,
+		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`:       false,
+		`SELECT title FROM albums ORDER BY RANDOM()`:                       false,
+		`INSERT INTO foo(name, age) VALUES(?, ?)`:                          false,
 	} {
 
 		stmts := []*proto.Statement{
