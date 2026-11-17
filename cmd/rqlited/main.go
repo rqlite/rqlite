@@ -586,6 +586,7 @@ func clusterService(cfg *Config, ln net.Listener, db cluster.Database, mgr clust
 	c.SetAPIAddr(cfg.HTTPAdv)
 	c.SetVersion(cmd.Version)
 	c.EnableHTTPS(cfg.HTTPx509Cert != "" && cfg.HTTPx509Key != "") // Conditions met for an HTTPS API
+	c.SetMaxRequestSize(cfg.NodeMaxRequestSize)
 	if err := c.Open(); err != nil {
 		return nil, err
 	}

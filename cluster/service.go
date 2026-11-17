@@ -83,8 +83,8 @@ const (
 	// concurrently, preventing connection floods from spawning unbounded goroutines.
 	maxConcurrentConns = 512
 
-	// MaxRequestSize is the maxiumum request size that may be placed on the wire.
-	MaxRequestSize = 1024 * 1024 * 1024
+	// DefaultMaxRequestSize is the default maxiumum request size that may be placed on the wire.
+	DefaultMaxRequestSize = 1024 * 1024 * 1024
 )
 
 func init() {
@@ -195,11 +195,12 @@ type Service struct {
 
 	credentialStore CredentialStore
 
-	mu      sync.RWMutex
-	https   bool              // Serving HTTPS?
-	apiAddr string            // host:port this node serves the HTTP API.
-	version string            // Version of software this node is running.
-	open    *rsync.AtomicBool // Tracks whether the service is currently open.
+	mu             sync.RWMutex
+	https          bool              // Serving HTTPS?
+	apiAddr        string            // host:port this node serves the HTTP API.
+	version        string            // Version of software this node is running.
+	maxRequestSize int               // Maximum internode request size.
+	open           *rsync.AtomicBool // Tracks whether the service is currently open.
 
 	// connTimeout is the maximum time to wait for data on a
 	// connection. Must be set before Open is called.
@@ -232,6 +233,7 @@ func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStor
 		credentialStore: credentialStore,
 		connTimeout:     connReadTimeout,
 		connLimit:       maxConcurrentConns,
+		maxRequestSize:  DefaultMaxRequestSize,
 		open:            rsync.NewAtomicBool(),
 	}
 }
@@ -276,6 +278,14 @@ func (s *Service) EnableHTTPS(b bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.https = b
+}
+
+// SetMaxRequestSize sets the maximum internode request size. If set to
+// less than 1 then no max request size is enforced.
+func (s *Service) SetMaxRequestSize(sz int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.maxRequestSize = sz
 }
 
 // SetAPIAddr sets the API address the cluster service returns.
@@ -512,7 +522,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			return
 		}
 		sz := binary.LittleEndian.Uint64(b[0:])
-		if sz > MaxRequestSize {
+		if s.maxRequestSize > 0 && sz > uint64(s.maxRequestSize) {
 			stats.Add(numRequestTooLarge, 1)
 			conn.Close()
 			return

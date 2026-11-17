@@ -229,6 +229,17 @@ This is the Raft address an rqlite node will advertise to other nodes, as part o
 default = ""
 
 [[flags]]
+name = "NodeMaxRequestSize"
+cli = "node-max-request-size"
+section = "Clustering"
+type = "int"
+short_help = "Maximum size in bytes of internode request"
+long_help = """
+This value determines the maximum size, in bytes, of a request sent between nodes. Requests above this size will result in the remote node closing the connection. Setting this value to less than 1 will permit any request size.
+"""
+default = 1073741824
+
+[[flags]]
 name = "JoinAddrs"
 cli = "join"
 section = "Clustering"
