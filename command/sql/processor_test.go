@@ -275,6 +275,99 @@ func Test_ContainsReturning(t *testing.T) {
 	}
 }
 
+func Test_ContainsExplain(t *testing.T) {
+	tests := []struct {
+		name     string
+		stmt     string
+		expected bool
+	}{
+		{
+			name:     "Contains EXPLAIN - followed by space",
+			stmt:     "explain select * from foo",
+			expected: true,
+		},
+		{
+			name:     "Contains EXPLAIN - query plan",
+			stmt:     "explain query plan select * from foo",
+			expected: true,
+		},
+		{
+			name:     "Contains EXPLAIN - followed by newline",
+			stmt:     "explain\nselect * from foo",
+			expected: true,
+		},
+		{
+			name:     "Contains EXPLAIN - followed by tab",
+			stmt:     "explain\tselect * from foo",
+			expected: true,
+		},
+		{
+			name:     "Contains EXPLAIN - followed by comment",
+			stmt:     "explain/* why */select * from foo",
+			expected: true,
+		},
+		{
+			name:     "Contains EXPLAIN - preceded by comment",
+			stmt:     "/* why */explain select * from foo",
+			expected: true,
+		},
+		{
+			name:     "No EXPLAIN - unrelated statement",
+			stmt:     "select * from foo",
+			expected: false,
+		},
+		{
+			name:     "No EXPLAIN - empty statement",
+			stmt:     "",
+			expected: false,
+		},
+		{
+			name:     "No EXPLAIN - part of longer name",
+			stmt:     "select explained, explain_text, unexplain from foo",
+			expected: false,
+		},
+		{
+			name:     "Edge case - case sensitivity",
+			stmt:     "Explain select * from foo",
+			expected: false, // Function assumes lower-case input
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ContainsExplain(tt.stmt)
+			if result != tt.expected {
+				t.Errorf("ContainsExplain(%q) = %v; want %v", tt.stmt, result, tt.expected)
+			}
+		})
+	}
+}
+
+func Test_EXPLAIN(t *testing.T) {
+	for sql, b := range map[string]bool{
+		`EXPLAIN SELECT * FROM foo`:                 true,
+		`EXPLAIN QUERY PLAN SELECT * FROM foo`:      true,
+		"EXPLAIN\nSELECT * FROM foo":                true,
+		"EXPLAIN\tQUERY PLAN\nSELECT * FROM foo":    true,
+		`EXPLAIN/* why */SELECT * FROM foo`:         true,
+		`SELECT * FROM foo`:                         false,
+		`SELECT explain_text FROM foo`:              false,
+		`INSERT INTO foo VALUES ('EXPLAIN SELECT')`: false,
+	} {
+		stmts := []*proto.Statement{
+			{
+				Sql: sql,
+			},
+		}
+		if err := Process(stmts, false, false); err != nil {
+			t.Fatalf("failed to process: %s", err)
+		}
+		if exp, got := b, stmts[0].SqlExplain; exp != got {
+			t.Fatalf(`expected %v for SQL "%s", but got %v`, exp, sql, got)
+		}
+	}
+}
+
 func Test_RANDOM_NoRewrites(t *testing.T) {
 	for _, str := range []string{
 		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678')`,

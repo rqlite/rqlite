@@ -119,11 +119,13 @@ func ContainsReturning(stmt string) bool {
 	return containsKeyword(stmt, "returning")
 }
 
-// ContainsExplain returns true if the statement contains an EXPLAIN clause.
-// The function performs a lower-case comparison so it is up to the caller to
-// ensure the statement is lower-cased.
+// ContainsExplain returns true if the statement may be an EXPLAIN. It is a
+// cheap check used to decide if a statement needs to be parsed, so it may
+// return true for a statement which turns out not to be one. The function
+// performs a lower-case comparison so it is up to the caller to ensure the
+// statement is lower-cased.
 func ContainsExplain(stmt string) bool {
-	return strings.Contains(stmt, "explain ")
+	return containsKeyword(stmt, "explain")
 }
 
 // containsKeyword returns true if keyword appears in the statement as a
