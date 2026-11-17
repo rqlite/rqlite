@@ -37,7 +37,8 @@ func ResetStats() {
 // Process processes the given SQL statements, rewriting them if necessary. If
 // random-rewriting is enabled, calls to the RANDOM() function are replaced with
 // an actual random value. If time-rewriting is enabled, 'now' arguments to the
-// time functions are replaced with the current Julian day, and the keywords
+// time functions are replaced with the current Julian day, as are time values
+// which are omitted and so default to the current time, and the keywords
 // CURRENT_TIMESTAMP, CURRENT_DATE and CURRENT_TIME are replaced with the
 // equivalent datetime(), date() and time() calls on that Julian day. If a statement
 // contains a RETURNING clause, the statement is marked as a query, so that the
@@ -210,19 +211,21 @@ func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) 
 		// If used, ensure the value is same for the duration of the statement
 		jd := julianDayAsNumberLit(rw.nowFn())
 
-		if rw.RewriteTime && len(n.Args) > 0 &&
-			(strings.EqualFold(n.Name.Name, "date") ||
-				strings.EqualFold(n.Name.Name, "time") ||
-				strings.EqualFold(n.Name.Name, "datetime") ||
-				strings.EqualFold(n.Name.Name, "julianday") ||
-				strings.EqualFold(n.Name.Name, "unixepoch")) {
-			if isNow(n.Args[0]) {
+		if rw.RewriteTime && isTimeFunc(n.Name.Name) {
+			// The time value is the first argument. If it is absent SQLite
+			// uses the current time, exactly as if 'now' had been passed.
+			if len(n.Args) == 0 {
+				n.Args = []sql.Expr{jd}
+			} else if isNow(n.Args[0]) {
 				n.Args[0] = jd
 			}
 			rw.modified = true
-		} else if rw.RewriteTime && len(n.Args) > 1 &&
+		} else if rw.RewriteTime && len(n.Args) > 0 &&
 			strings.EqualFold(n.Name.Name, "strftime") {
-			if isNow(n.Args[1]) {
+			// The time value follows the format, and is also optional.
+			if len(n.Args) == 1 {
+				n.Args = append(n.Args, jd)
+			} else if isNow(n.Args[1]) {
 				n.Args[1] = jd
 			}
 			rw.modified = true
@@ -264,6 +267,17 @@ func (rw *Rewriter) VisitEnd(node sql.Node) (sql.Node, error) {
 		rw.orderedBy = false
 	}
 	return node, nil
+}
+
+// isTimeFunc returns true if name is a SQLite time function which takes the
+// time value as its first argument.
+func isTimeFunc(name string) bool {
+	for _, fn := range []string{"date", "time", "datetime", "julianday", "unixepoch"} {
+		if strings.EqualFold(name, fn) {
+			return true
+		}
+	}
+	return false
 }
 
 func isNow(e sql.Expr) bool {
