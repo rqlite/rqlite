@@ -313,6 +313,73 @@ func Test_Rewriter_Time(t *testing.T) {
 	}
 }
 
+func Test_Rewriter_Timezones(t *testing.T) {
+	const stmt = `INSERT INTO foo(col1) VALUES (time('now'))`
+
+	mst := time.FixedZone("UTC-7", -7*3600)
+	jst := time.FixedZone("UTC+9", 9*3600)
+
+	// SQLite interprets a Julian day as UTC, so the rewritten value must
+	// depend only on the instant, never on the time zone of the node.
+	// Julian day 2440423.0 is 1969-07-20 12:00:00 UTC.
+	tests := []struct {
+		name string
+		now  time.Time
+		exp  string
+	}{
+		// All these should resolve to the same julian day.
+		{
+			name: "noon UTC",
+			now:  time.Date(1969, 7, 20, 12, 0, 0, 0, time.UTC),
+			exp:  `time(2440423.000000)`,
+		},
+		{
+			name: "same instant as noon UTC, expressed in UTC-7",
+			now:  time.Date(1969, 7, 20, 5, 0, 0, 0, mst),
+			exp:  `time(2440423.000000)`,
+		},
+		{
+			name: "same instant as noon UTC, expressed in UTC+9",
+			now:  time.Date(1969, 7, 20, 21, 0, 0, 0, jst),
+			exp:  `time(2440423.000000)`,
+		},
+		// The time looks the same, but is different zone, so should resolve
+		// to different julian days.
+		{
+			name: "noon in UTC-7, which is 19:00 UTC",
+			now:  time.Date(1969, 7, 20, 12, 0, 0, 0, mst),
+			exp:  `time(2440423.291667)`,
+		},
+		{
+			name: "noon in UTC+9, which is 03:00 UTC",
+			now:  time.Date(1969, 7, 20, 12, 0, 0, 0, jst),
+			exp:  `time(2440422.625000)`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// A new Rewriter and a newly parsed statement for each case,
+			// because Do modifies the statement it is given.
+			rw := NewRewriter()
+			rw.RewriteTime = true
+			rw.nowFn = func() time.Time { return tt.now }
+
+			s, err := sql.NewParser(strings.NewReader(stmt)).ParseStatement()
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, _, _, err := rw.Do(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(got.String(), tt.exp) {
+				t.Fatalf("exp statement to contain %s, got: %s", tt.exp, got.String())
+			}
+		})
+	}
+}
+
 // Test_Rewriter_SchemaUntouched checks that expressions stored in the schema
 // and evaluated later by SQLite -- column defaults, CHECK constraints,
 // generated columns, indexes, triggers and views -- are never rewritten.

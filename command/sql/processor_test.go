@@ -1,8 +1,10 @@
 package sql
 
 import (
+	"math"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
 )
@@ -568,5 +570,28 @@ func Test_Complex(t *testing.T) {
 
 	if err := Process([]*proto.Statement{stmt}, true, true); err != nil {
 		t.Fatalf("failed to rewrite complex statement: %s", err)
+	}
+}
+
+func Test_JulianDay(t *testing.T) {
+	const exp = 2455146.458333333 // 2009-11-10 23:00:00 UTC
+	const tol = 1e-8              // days; about 0.86 ms tolerance
+
+	denver := time.FixedZone("UTC-7", -7*3600)
+	tokyo := time.FixedZone("UTC+9", 9*3600)
+
+	tests := []struct {
+		name string
+		t    time.Time
+	}{
+		{"UTC", time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)},
+		{"UTC-7", time.Date(2009, time.November, 10, 16, 0, 0, 0, denver)},
+		{"UTC+9", time.Date(2009, time.November, 11, 8, 0, 0, 0, tokyo)},
+	}
+
+	for _, tt := range tests {
+		if got := JulianDay(tt.t); math.Abs(got-exp) > tol {
+			t.Fatalf("%s: JulianDay is wrong, exp: %.10f, got: %.10f", tt.name, exp, got)
+		}
 	}
 }
