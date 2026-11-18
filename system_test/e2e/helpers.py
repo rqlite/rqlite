@@ -17,6 +17,9 @@ import sqlite3
 import string
 
 TIMEOUT=10
+RAFT_HEARTBEAT_TIMEOUT="200ms"
+RAFT_ELECTION_TIMEOUT="200ms"
+RAFT_LEADER_LEASE_TIMEOUT="200ms"
 
 seqRe = re.compile(r"^{'results': \[\], 'sequence_number': \d+}$")
 
@@ -129,6 +132,9 @@ class Node(object):
     self.raft_snap_threshold = raft_snap_threshold
     self.raft_snap_int = raft_snap_int
     self.raft_cluster_remove_shutdown = raft_cluster_remove_shutdown
+    self.raft_election_timeout = RAFT_ELECTION_TIMEOUT
+    self.raft_heartbeat_timeout = RAFT_HEARTBEAT_TIMEOUT
+    self.raft_leader_lease_timeout = RAFT_LEADER_LEASE_TIMEOUT
     self.http_cert = http_cert
     self.http_key = http_key
     self.http_no_verify = http_no_verify
@@ -197,7 +203,10 @@ class Node(object):
                '-raft-snap', str(self.raft_snap_threshold),
                '-raft-snap-int', self.raft_snap_int,
                '-raft-cluster-remove-shutdown=%s' % str(self.raft_cluster_remove_shutdown).lower(),
-               '-raft-non-voter=%s' % str(not self.raft_voter).lower()]
+               '-raft-non-voter=%s' % str(not self.raft_voter).lower(),
+               '-raft-election-timeout=%s' % self.raft_election_timeout,
+               '-raft-heartbeat-timeout=%s' % self.raft_heartbeat_timeout,
+               '-raft-leader-lease-timeout=%s' % self.raft_leader_lease_timeout]
     if self.cdc_config is not None:
       command += ['-cdc-config', self.cdc_config]
     if self.extensions_path is not None:
