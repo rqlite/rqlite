@@ -1,7 +1,7 @@
 ## v10.7.4 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #3062](https://github.com/rqlite/rqlite/pull/3062): When rewriting time capture the value once per statement, to match SQLite.
-- [PR #3063](https://github.com/rqlite/rqlite/pull/3063): Normalize timezone for JulianDay calculations. Fixes issue [#3061](https://github.com/rqlite/rqlite/issues/3061). Thanks @clarkmcc
+- [PR #3063](https://github.com/rqlite/rqlite/pull/3063): Normalize timezone for _Julian Day_ calculations. Fixes issue [#3061](https://github.com/rqlite/rqlite/issues/3061). Thanks @clarkmcc
 - [PR #3064](https://github.com/rqlite/rqlite/pull/3064): Shorten end-to-end testing leader timeouts, speeding up test completion.
 - [PR #3066](https://github.com/rqlite/rqlite/pull/3066): Upgrade dependencies via `go get`.
 
