@@ -814,11 +814,18 @@ func Test_SingleNodeRequest_WriteIgnoresDBTimeout(t *testing.T) {
 		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// The timeout does apply to a request which only reads.
+	// The timeout does apply to a request which only reads. The read is
+	// stalled until the timeout expires, so the outcome does not depend on
+	// the timeout expiring before a fast read completes.
 	eqr = executeQueryRequestFromString(`SELECT * FROM foo`, proto.ConsistencyLevel_WEAK, false, false, false)
-	eqr.Request.DbTimeout = 1
-	if _, _, _, err := s.Request(context.Background(), eqr); err == nil {
-		t.Fatalf("expected read-only request to time out")
+	eqr.Request.Statements[0].ForceStall = true
+	eqr.Request.DbTimeout = int64(20 * time.Millisecond)
+	r, _, _, err = s.Request(context.Background(), eqr)
+	if err != nil {
+		t.Fatalf("failed to execute read-only request on single node: %s", err.Error())
+	}
+	if len(r) != 1 || r[0].GetQ().GetError() != db.ErrQueryTimeout.Error() {
+		t.Fatalf("expected read-only request to time out, got %s", asJSON(r))
 	}
 }
 
