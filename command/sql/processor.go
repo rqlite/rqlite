@@ -328,10 +328,11 @@ func isString(e sql.Expr, v string) bool {
 }
 
 func julianDayAsNumberLit(t time.Time) *sql.NumberLit {
-	return &sql.NumberLit{Value: fmt.Sprintf("%f", julianDay(t))}
+	return &sql.NumberLit{Value: fmt.Sprintf("%f", JulianDay(t))}
 }
 
-func julianDay(t time.Time) float64 {
+func JulianDay(t time.Time) float64 {
+	t = t.UTC()
 	year := t.Year()
 	month := int(t.Month())
 	day := t.Day()
