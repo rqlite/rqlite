@@ -184,6 +184,9 @@ func (rw *Rewriter) Do(stmt sql.Statement) (sql.Statement, bool, bool, error) {
 func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) {
 	retNode := node
 
+	// Capture it once per call, to match SQLite.
+	now := rw.nowFn()
+
 	switch retNode.(type) {
 	case *sql.DefaultConstraint, *sql.CheckConstraint, *sql.GeneratedConstraint,
 		*sql.CreateIndexStatement, *sql.CreateTriggerStatement, *sql.CreateViewStatement:
@@ -219,14 +222,14 @@ func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) 
 			if fn != "" {
 				retNode = &sql.Call{
 					Name: &sql.Ident{Name: fn},
-					Args: []sql.Expr{julianDayAsNumberLit(rw.nowFn())},
+					Args: []sql.Expr{julianDayAsNumberLit(now)},
 				}
 				rw.modified = true
 			}
 		}
 	case *sql.Call:
 		// If used, ensure the value is same for the duration of the statement
-		jd := julianDayAsNumberLit(rw.nowFn())
+		jd := julianDayAsNumberLit(now)
 
 		if rw.RewriteTime && isTimeFunc(n.Name.Name) {
 			// The time value is the first argument. If it is absent SQLite
