@@ -249,6 +249,90 @@ func Test_CompactingFrameScanner_TrailingUncommittedFrames(t *testing.T) {
 	}
 }
 
+// Test_CompactingFrameScanner_TrailingUncommittedFrames_SQLite tests a WAL,
+// written by SQLite, in which committed transactions are followed by many
+// frames of a transaction which is still open. Scanning it must give the same
+// compacted WAL as scanning a copy cut off after the last commit frame, when
+// starting at frame 0, part-way through, and at the first uncommitted frame.
+func Test_CompactingFrameScanner_TrailingUncommittedFrames_SQLite(t *testing.T) {
+	dir := t.TempDir()
+	walPath := dir + "/test.db-wal"
+	conn, err := sql.Open("sqlite3", fmt.Sprintf("file:%s", dir+"/test.db?_journal_mode=WAL&_synchronous=OFF"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	conn.SetMaxOpenConns(1) // The transaction must stay on one connection.
+	mustExec(conn, "PRAGMA wal_autocheckpoint=0")
+	mustExec(conn, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+	for i := range 10 {
+		mustExec(conn, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
+	}
+	committedSz := mustFileSize(walPath)
+
+	// Open a transaction and insert enough rows that SQLite writes its frames
+	// to the WAL before it commits. The transaction is left open.
+	mustExec(conn, "PRAGMA cache_size=5")
+	mustExec(conn, "BEGIN")
+	for i := range 1000 {
+		mustExec(conn, fmt.Sprintf("INSERT INTO foo (name) VALUES ('%0500d')", i))
+	}
+	b, err := os.ReadFile(walPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	committed := b[:committedSz]
+
+	const frameSize = WALFrameHeaderSize + 4096
+	nCommitted := (committedSz - WALHeaderSize) / frameSize
+	if nCommitted < 2 {
+		t.Fatalf("expected at least 2 committed frames, got %d", nCommitted)
+	}
+	if nUncommitted := (int64(len(b)) - committedSz) / frameSize; nUncommitted < 2 {
+		t.Fatalf("expected at least 2 uncommitted frames, got %d", nUncommitted)
+	}
+
+	mustScan := func(data []byte, start int64, fullScan bool) *CompactingFrameScanner {
+		t.Helper()
+		s, err := NewCompactingFrameScanner(bytes.NewReader(data), start, fullScan)
+		if err != nil {
+			t.Fatalf("start=%d, fullScan=%v: failed to create scanner: %s", start, fullScan, err)
+		}
+		return s
+	}
+	mustBytes := func(s *CompactingFrameScanner) []byte {
+		t.Helper()
+		data, err := s.Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+
+	for _, tt := range []struct {
+		start    int64
+		fullScan bool
+	}{
+		{0, true},
+		{0, false},
+		{nCommitted / 2, false},
+	} {
+		s := mustScan(b, tt.start, tt.fullScan)
+		if s.Empty() {
+			t.Fatalf("start=%d, fullScan=%v: expected non-empty scanner", tt.start, tt.fullScan)
+		}
+		if !bytes.Equal(mustBytes(s), mustBytes(mustScan(committed, tt.start, tt.fullScan))) {
+			t.Fatalf("start=%d, fullScan=%v: compacted WAL carries frames after the last commit frame",
+				tt.start, tt.fullScan)
+		}
+	}
+
+	// Starting at the first uncommitted frame there is nothing to carry.
+	if !mustScan(b, nCommitted, false).Empty() {
+		t.Fatal("expected empty scanner when starting at the first uncommitted frame")
+	}
+}
+
 func Test_CompactingFrameScanner_Bytes_PartialSection(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {
