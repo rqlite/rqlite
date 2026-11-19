@@ -1,4 +1,6 @@
-## v10.7.4 (unreleased)
+## v10.7.4 (November 19th 2026)
+This release addresses a bug related to [rewriting of time-related functions](https://rqlite.io/docs/api/non-deterministic/) when each node is in a different timezone. Dependencies also upgraded.
+
 ### Implementation changes and bug fixes
 - [PR #3062](https://github.com/rqlite/rqlite/pull/3062): When rewriting time capture the value once per statement, to match SQLite.
 - [PR #3063](https://github.com/rqlite/rqlite/pull/3063): Normalize timezone for _Julian Day_ calculations. Fixes issue [#3061](https://github.com/rqlite/rqlite/issues/3061). Thanks @clarkmcc
