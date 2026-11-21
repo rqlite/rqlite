@@ -631,8 +631,8 @@ func (s *Store) Open() (retErr error) {
 			if removeDBFiles {
 				stats.Add(numRestoresStart, 1)
 				s.numSnapshotsStart.Add(1)
-				if err := fsutil.Remove(s.cleanSnapshotPath); err != nil {
-					s.logger.Printf("warning: failed to remove clean snapshot marker file: %s", err)
+				if err := s.discardSnapshotBaseline(); err != nil {
+					s.logger.Printf("warning: %s", err)
 				}
 			}
 		}()
@@ -771,8 +771,8 @@ func (s *Store) Open() (retErr error) {
 		}
 
 		// Recovering a node invalidates any existing SQLite file.
-		if err := fsutil.Remove(s.cleanSnapshotPath); err != nil {
-			return fmt.Errorf("failed to remove clean snapshot file during RecoverNode: %w", err)
+		if err := s.discardSnapshotBaseline(); err != nil {
+			return fmt.Errorf("failed to discard snapshot baseline during RecoverNode: %w", err)
 		}
 		if err = RecoverNode(s.raftDir, s.dbConf, s.logger, s.raftLog,
 			s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
@@ -2708,16 +2708,19 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		//
 		// A failed FULL snapshot is always retryable, since we're looking to capture
 		// the entire database. So return the error and Raft will retry.
+		//
+		// A full snapshot is a new baseline, so nothing which describes the database
+		// in terms of earlier snapshots can be allowed to outlive it. In particular any
+		// WAL left staged by an earlier failed incremental snapshot must never be
+		// packaged on top of it.
+		if err := s.discardSnapshotBaseline(); err != nil {
+			return nil, err
+		}
 		if meta, _, err := s.checkpointer.Checkpoint(nil, truncateTimeout); err != nil {
 			return nil, fmt.Errorf("checkpoint failed during full snapshot: %w", err)
 		} else if !meta.Success() {
 			s.numFullSnapshotsMetaFail.Add(1)
 			return nil, fmt.Errorf("checkpoint did not succeed during full snapshot")
-		}
-		// A full snapshot supersedes any WAL left staged by an earlier failed
-		// incremental snapshot; that WAL must never be packaged on top of it.
-		if err := fsutil.RemoveAll(s.walStagingDir); err != nil {
-			return nil, err
 		}
 		streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
 		if err != nil {
@@ -2883,9 +2886,11 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	}
 
 	// Any existing SQLite file is about to be invalid, so mark that we can't
-	// fast-restart with it.
-	if err := fsutil.Remove(s.cleanSnapshotPath); err != nil {
-		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
+	// fast-restart with it. Any WAL left staged by an earlier failed incremental
+	// snapshot was made from that file too, and must never be packaged on top
+	// of the database being installed.
+	if err := s.discardSnapshotBaseline(); err != nil {
+		return err
 	}
 
 	// We're about to enter a point of no return. We're going to swap in the incoming
@@ -2904,12 +2909,6 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		return fmt.Errorf("error swapping database file: %v", err)
 	}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
-
-	// Any WAL left staged by an earlier failed incremental snapshot was made from
-	// the database just replaced; it must never be packaged on top of this one.
-	if err := fsutil.RemoveAll(s.walStagingDir); err != nil {
-		return fmt.Errorf("failed to remove WAL staging directory post restore: %s", err)
-	}
 
 	// Installed SQLite database is safe for fast restarts again. It is fingerprinted
 	// against the very index and term the node is adopting here, so that a restart
@@ -3147,6 +3146,21 @@ func (s *Store) selfLeaderChange(leader bool) {
 			s.logger.Printf("node auto-restored successfully from %s", s.restorePath)
 		}
 	}
+}
+
+// discardSnapshotBaseline removes everything on disk which describes the SQLite
+// database in terms of the snapshots in the Snapshot Store: the clean-snapshot
+// marker file, and any WAL files staged for the next incremental snapshot. It
+// must be called before a new full image of the database becomes the baseline,
+// whether that image is captured by a full snapshot or installed by a restore.
+func (s *Store) discardSnapshotBaseline() error {
+	if err := fsutil.Remove(s.cleanSnapshotPath); err != nil {
+		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
+	}
+	if err := fsutil.RemoveAll(s.walStagingDir); err != nil {
+		return fmt.Errorf("failed to remove WAL staging directory: %w", err)
+	}
+	return nil
 }
 
 // createSnapshotFingerprint writes the clean-snapshot marker file, recording the
