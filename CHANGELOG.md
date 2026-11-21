@@ -1,6 +1,7 @@
 ## v10.7.5 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #3067](https://github.com/rqlite/rqlite/pull/3067): Discard WAL files staged by a failed incremental snapshot when the database is replaced by a load, boot, or restore, so they are not packaged on top of the new database. Thanks @clarkmcc
+- [PR #XXXX](https://github.com/rqlite/rqlite/pull/XXXX): Keep a full snapshot due until one reaches the Snapshot Store, even if the reason it became due is no longer detectable.
 
 ## v10.7.4 (November 19th 2026)
 This release addresses a bug related to [rewriting of time-related functions](https://rqlite.io/docs/api/non-deterministic/) when each node is in a different timezone. Dependencies also upgraded.

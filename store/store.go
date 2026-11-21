@@ -2716,6 +2716,13 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		if err := s.discardSnapshotBaseline(); err != nil {
 			return nil, err
 		}
+
+		// Record that a full snapshot is due, as the reason for it being due may not
+		// outlive this attempt. If this attempt does not result in a snapshot reaching
+		// the Snapshot Store, then the next attempt must be a full snapshot too.
+		if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
+			return nil, err
+		}
 		if meta, _, err := s.checkpointer.Checkpoint(nil, truncateTimeout); err != nil {
 			return nil, fmt.Errorf("checkpoint failed during full snapshot: %w", err)
 		} else if !meta.Success() {

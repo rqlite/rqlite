@@ -549,6 +549,34 @@ func Test_SingleNode_DatabaseFileModified(t *testing.T) {
 	if s.numSnapshots.Load() != 6 {
 		t.Fatalf("expected 6 snapshots in total, got %d", s.numSnapshots.Load())
 	}
+
+	// Touch the database file again, but this time the full snapshot which results
+	// is released without ever being persisted. The Store's record of the last
+	// modified time has been brought up to date by then, so only the Snapshot
+	// Store can remember that a full snapshot is still due.
+	lt, err = s.db.DBLastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time of database: %s", err.Error())
+	}
+	if err := os.Chtimes(s.dbPath, time.Time{}, lt.Add(time.Second)); err != nil {
+		t.Fatalf("failed to change database file times: %s", err.Error())
+	}
+	_, _, err = s.Execute(context.Background(), executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+	f, err := NewFSM(s).Snapshot()
+	if err != nil {
+		t.Fatalf("failed to snapshot node: %s", err.Error())
+	}
+	if s.numFullSnapshots != 3 {
+		t.Fatalf("expected 3 full snapshots, got %d", s.numFullSnapshots)
+	}
+	f.Release()
+	insertSnap()
+	if s.numFullSnapshots != 4 {
+		t.Fatalf("expected 4 full snapshots, got %d", s.numFullSnapshots)
+	}
 }
 
 func Test_SingleNodeDBAppliedIndex_SnapshotRestart(t *testing.T) {
