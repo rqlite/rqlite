@@ -33,6 +33,13 @@ import (
 // Raft's batching of concurrent writes; queued writes keep their batching
 // because a queue batch is one request.
 
+// The marshalers are variables so that tests can make them fail, and can run
+// code between recording a changeset and applying it.
+var (
+	pbMarshal      = pb.Marshal
+	commandMarshal = command.Marshal
+)
+
 // changesetApply records the request's changeset on the Leader and sends it
 // through Raft. It returns ok false, with nothing done, if the request must
 // take the statement path. The caller must hold s.changesetMu.
@@ -59,11 +66,11 @@ func (s *Store) changesetApply(ctx context.Context, req *proto.Request, timings,
 		return results, s.raft.AppliedIndex(), true, nil
 	}
 
-	b, err := pb.Marshal(&proto.ChangesetRequest{Changeset: cs})
+	b, err := pbMarshal(&proto.ChangesetRequest{Changeset: cs})
 	if err != nil {
 		return nil, 0, true, err
 	}
-	b, err = command.Marshal(&proto.Command{
+	b, err = commandMarshal(&proto.Command{
 		Type:       proto.Command_COMMAND_TYPE_CHANGESET,
 		SubCommand: b,
 	})
