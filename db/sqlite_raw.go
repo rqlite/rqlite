@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"reflect"
+	"runtime"
 	"sync"
 	"time"
 	"unsafe"
@@ -101,6 +102,30 @@ func (r rawConn) setLimit(id, newVal int) int {
 // no open transaction.
 func (r rawConn) autocommit() bool {
 	return sqlite3.Xsqlite3_get_autocommit(r.tls, r.db) != 0
+}
+
+// totalChanges returns the number of rows inserted, updated and deleted by
+// completed statements on the connection since it was opened. It counts the rows
+// changed by triggers and by foreign key actions, and not the rows deleted by
+// REPLACE conflict resolution.
+func (r rawConn) totalChanges() int64 {
+	return int64(sqlite3.Xsqlite3_total_changes64(r.tls, r.db))
+}
+
+// dbstatusDeferredFKs is SQLITE_DBSTATUS_DEFERRED_FKS, which modernc does not name.
+const dbstatusDeferredFKs = 10
+
+// deferredFKs returns the number of foreign key violations the open transaction
+// has not yet resolved: the count COMMIT checks, and refuses to commit while it
+// is not zero.
+func (r rawConn) deferredFKs() int {
+	// The slots are on the heap, which the Go runtime never moves.
+	slots := new([2]int32)
+	sqlite3.Xsqlite3_db_status(r.tls, r.db, dbstatusDeferredFKs,
+		uintptr(unsafe.Pointer(&slots[0])), uintptr(unsafe.Pointer(&slots[1])), 0)
+	n := int(slots[0])
+	runtime.KeepAlive(slots)
+	return n
 }
 
 // stmtReadOnly prepares query and reports whether SQLite considers it read-only.

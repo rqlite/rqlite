@@ -239,7 +239,18 @@ func Test_Changeset_Replicates(t *testing.T) {
 				mustExecute(db, "PRAGMA foreign_keys=ON")
 			}
 			for _, s := range tt.stmts {
-				res, cs := mustCapture(t, a, csRequest(false, s))
+				res, cs, err := a.ExecuteCapture(context.Background(), csRequest(false, s), false)
+				if errors.Is(err, ErrNotCapturable) {
+					// The session coalesces or does not count what the request did
+					// (a key update cascading, a value updated to itself), so it is
+					// refused and takes the statement path on every node.
+					mustExecute(a, s)
+					mustExecute(b, s)
+					continue
+				}
+				if err != nil {
+					t.Fatalf("capture failed: %s", err)
+				}
 				if res[0].GetE().GetError() != "" {
 					t.Fatalf("%s: %s", s, res[0].GetE().GetError())
 				}

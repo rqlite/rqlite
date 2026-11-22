@@ -225,7 +225,9 @@ func Test_Changeset_ReadChangeset(t *testing.T) {
 	real := cChangesetStart
 	defer func() { cChangesetStart = real }()
 	cChangesetStart = func(tls *libc.TLS, pp uintptr, n int32, p uintptr) int32 { return sqlite3.SQLITE_NOMEM }
-	if _, err := raw.readChangeset(csX); !errors.Is(err, ErrChangesetMalformed) {
+	// A failure of this node is not a malformed changeset: it is fatal.
+	var fatal *FatalError
+	if _, err := raw.readChangeset(csX); errors.Is(err, ErrChangesetMalformed) || !errors.As(err, &fatal) {
 		t.Fatalf("start failure: %v", err)
 	}
 }

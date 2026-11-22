@@ -217,6 +217,7 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 	// ended, which covers the tail of a multi-statement string.
 	var cs []byte
 	var runErr error
+	changesBefore := raw.totalChanges()
 	for _, stmt := range inner.Statements {
 		one := &command.Request{
 			Statements:     []*command.Statement{stmt},
@@ -225,10 +226,14 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 		}
 		r, err := run(one)
 		results = append(results, r...)
-		if auth.refused() || raw.autocommit() {
+		if auth.refused() {
 			// Nothing is committed: the transaction, if it still exists, is
 			// rolled back on return, and the caller takes the statement path.
 			return nil, nil, ErrNotCapturable
+		}
+		if raw.autocommit() {
+			// Nothing was denied, yet the transaction is gone: SQLite ended it.
+			return nil, nil, transactionEnded(err, r)
 		}
 		if err != nil {
 			runErr = err
@@ -237,6 +242,11 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 		if req.Transaction && hasError(r) {
 			// The statement path stops at the first error of a transaction.
 			break
+		}
+		if !req.Transaction && !hasError(r) && raw.deferredFKs() > 0 {
+			// On the statement path this statement commits on its own, and the
+			// commit fails on the violation. Only the statement path reports that.
+			return nil, nil, ErrNotCapturable
 		}
 	}
 	removeAuth()
@@ -247,9 +257,14 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 		// The statement path rolls back the whole request on the first error.
 		return results, nil, nil
 	}
+	if raw.deferredFKs() > 0 {
+		// The commit the statement path makes at the end would fail.
+		return nil, nil, ErrNotCapturable
+	}
 
-	// The session records only what it can account for: main-schema tables with a
-	// key it can address. Anything else must take the statement path.
+	// Cheap pre-check, before the changeset is built: the session records only
+	// main-schema tables with a key it can address. It is a prediction, and the
+	// count below is what decides.
 	if ok, err := c.tablesRecordable(ctx, auth.writtenTables()); err != nil {
 		return nil, nil, classifyError(err)
 	} else if !ok {
@@ -260,15 +275,55 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 	if max <= 0 {
 		max = DefaultChangesetMaxSize
 	}
+	// The session knows how large the changeset will be before it is built.
+	if size := sess.size(); size > max {
+		return nil, nil, fmt.Errorf("%w: %d bytes, limit %d", ErrChangesetTooLarge, size, max)
+	}
 	if cs, err = sess.changeset(); err != nil {
 		return nil, nil, err
 	}
-	if int64(len(cs)) > max {
-		return nil, nil, fmt.Errorf("%w: %d bytes, limit %d", ErrChangesetTooLarge, len(cs), max)
+
+	// Verify, instead of predicting: the changeset must account for every row
+	// the request changed. A row the session did not record (a NULL key, a table
+	// it cannot see, a net-zero insert and delete) shows as fewer operations than
+	// changes, and a REPLACE that deleted another row shows as more. Anything that
+	// does not match exactly is replicated as statements.
+	ops, err := raw.changesetOps(cs)
+	if err != nil {
+		return nil, nil, err
+	}
+	if int64(ops) != raw.totalChanges()-changesBefore {
+		return nil, nil, ErrNotCapturable
 	}
 
 	// DDL cannot have run: the authorizer refuses it, and refusal is checked above.
 	return results, cs, nil
+}
+
+// transactionEnded builds the error for a capture transaction that SQLite
+// rolled back by itself. A timeout or an interrupt does that, and is an error
+// of the request: the statement path would run the same statements for as long
+// again. Anything else (INSERT OR ROLLBACK, RAISE(ROLLBACK)) is a deterministic
+// request that only the statement path replicates.
+func transactionEnded(err error, r []*command.ExecuteQueryResponse) error {
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	}
+	for _, x := range r {
+		if e := x.GetE().GetError(); e != "" {
+			msg += " " + e
+		}
+		if e := x.GetQ().GetError(); e != "" {
+			msg += " " + e
+		}
+	}
+	for _, s := range []string{"interrupt", "timeout", "deadline exceeded", "canceled"} {
+		if strings.Contains(msg, s) {
+			return fmt.Errorf("changeset capture was interrupted and rolled back: %s", strings.TrimSpace(msg))
+		}
+	}
+	return fmt.Errorf("%w: the transaction ended: %s", ErrNotCapturable, strings.TrimSpace(msg))
 }
 
 func hasError(results []*command.ExecuteQueryResponse) bool {
@@ -312,7 +367,20 @@ func (c *Conn) ApplyChangeset(changeset []byte) error {
 	if err := c.checkChangesetShape(context.Background(), tables); err != nil {
 		return classifyError(err)
 	}
-	return classifyError(raw.applyChangeset(changeset))
+	err = raw.applyChangeset(changeset)
+	var se *SQLiteError
+	if errors.As(err, &se) && se.Code == sqlite3.SQLITE_CORRUPT {
+		// The session extension reports bytes it cannot parse as CORRUPT, the code
+		// of a damaged database file, and the walk above does not see every such
+		// case. Only the file can tell them apart: a damaged one is a failure of
+		// this node and fatal, a sound one means the bytes are at fault.
+		var verdict string
+		if qerr := c.conn.QueryRowContext(context.Background(), "PRAGMA quick_check(1)").Scan(&verdict); qerr != nil || verdict != "ok" {
+			return classifyError(err)
+		}
+		return fmt.Errorf("%w: %s", ErrChangesetMalformed, se.Error())
+	}
+	return classifyError(err)
 }
 
 // rawHandles returns the raw SQLite handles behind the connection.
@@ -482,13 +550,9 @@ func (r rawConn) applyChangeset(changeset []byte) (retErr error) {
 	if kind := *(*int32)(cPtr(conflict)); kind != 0 {
 		return fmt.Errorf("%w (kind %d, rc %d)", ErrChangesetConflict, kind, rc)
 	}
-	if rc&0xff == sqlite3.SQLITE_CORRUPT {
-		// The session extension reports a changeset it cannot parse as CORRUPT,
-		// which is the code of a damaged database file. The bytes are at fault,
-		// not the file: a damaged file fails every ordinary statement the same
-		// way and is classified as fatal there.
-		return fmt.Errorf("%w (rc %d)", ErrChangesetMalformed, rc)
-	}
+	// The whole changeset was walked before this call, so the bytes are known to
+	// parse: a SQLITE_CORRUPT here is the database file, and is fatal like any
+	// other node-local failure (the caller classifies it).
 	return r.errstr(rc)
 }
 

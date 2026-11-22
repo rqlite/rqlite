@@ -34,7 +34,7 @@ func (c *Conn) tableInfo(ctx context.Context, name string) (kind string, without
 
 	var col tableColumn
 	var nn, pk, hidden int
-	if err := queryAll(ctx, c, `SELECT name, type, "notnull", pk, hidden FROM pragma_table_xinfo(?) ORDER BY cid`,
+	if err := queryAll(ctx, c, `SELECT name, type, "notnull", pk, hidden FROM pragma_table_xinfo(?, 'main') ORDER BY cid`,
 		[]any{name}, func() []any { return []any{&col.name, &col.typ, &nn, &pk, &hidden} }, func() error {
 			if hidden != 0 { // Hidden and generated columns are not in a changeset.
 				return nil
@@ -93,7 +93,7 @@ func (c *Conn) tablesRecordable(ctx context.Context, written []string) (bool, er
 	var edges []edge
 	var e edge
 	if err := queryAll(ctx, c,
-		`SELECT m.name, f."table" FROM sqlite_master m, pragma_foreign_key_list(m.name) f WHERE m.type = 'table'`,
+		`SELECT m.name, f."table" FROM main.sqlite_master m, pragma_foreign_key_list(m.name, 'main') f WHERE m.type = 'table'`,
 		nil, func() []any { return []any{&e.child, &e.parent} }, func() error {
 			edges = append(edges, e)
 			return nil
@@ -160,10 +160,32 @@ type changesetTable struct {
 // told from a valid one without applying anything, and returns the shape of
 // every table it names.
 func (r rawConn) readChangeset(cs []byte) ([]changesetTable, error) {
+	tables, _, err := r.readChangesetOps(cs)
+	return tables, err
+}
+
+// changesetOps returns the number of row operations in the changeset.
+func (r rawConn) changesetOps(cs []byte) (int, error) {
+	_, ops, err := r.readChangesetOps(cs)
+	return ops, err
+}
+
+// malformedOrLocal turns a code the iterator returned into an error. Only
+// SQLITE_CORRUPT can come from the bytes: the iterator reads memory and touches
+// no database, so any other code (out of memory, I/O, full) is a failure of this
+// node, which is fatal as it is on the statement path.
+func (r rawConn) malformedOrLocal(rc int32) error {
+	if rc&0xff == sqlite3.SQLITE_CORRUPT {
+		return fmt.Errorf("%w (rc %d)", ErrChangesetMalformed, rc)
+	}
+	return classifyError(r.errstr(rc))
+}
+
+func (r rawConn) readChangesetOps(cs []byte) ([]changesetTable, int, error) {
 	n := (len(cs) + 7) &^ 7
 	buf := cMalloc(r.tls, types.Size_t(n+48))
 	if buf == 0 {
-		return nil, r.errstr(sqlite3.SQLITE_NOMEM)
+		return nil, 0, classifyError(r.errstr(sqlite3.SQLITE_NOMEM))
 	}
 	defer libc.Xfree(r.tls, buf)
 	copy(unsafeSlice(buf, len(cs)), cs)
@@ -174,22 +196,24 @@ func (r rawConn) readChangeset(cs []byte) ([]changesetTable, error) {
 	*(*uintptr)(cPtr(pIter)) = 0
 
 	if rc := cChangesetStart(r.tls, pIter, int32(len(cs)), buf); rc != sqlite3.SQLITE_OK {
-		return nil, fmt.Errorf("%w (rc %d)", ErrChangesetMalformed, rc)
+		return nil, 0, r.malformedOrLocal(rc)
 	}
 	iter := *(*uintptr)(cPtr(pIter))
 	defer sqlite3.Xsqlite3changeset_finalize(r.tls, iter)
 
 	var tables []changesetTable
+	ops := 0
 	seen := make(map[string]int)
 	rc := sqlite3.Xsqlite3changeset_next(r.tls, iter)
 	for ; rc == sqlite3.SQLITE_ROW; rc = sqlite3.Xsqlite3changeset_next(r.tls, iter) {
 		// op and pk cannot fail while next has returned a row.
 		sqlite3.Xsqlite3changeset_op(r.tls, iter, pTab, pCol, pOp, pInd)
+		ops++
 		name := libc.GoString(*(*uintptr)(cPtr(pTab)))
 		nCol := int(*(*int32)(cPtr(pCol)))
 		if i, ok := seen[name]; ok {
 			if len(tables[i].pk) != nCol {
-				return nil, fmt.Errorf("%w: table %q has two column counts", ErrChangesetMalformed, name)
+				return nil, 0, fmt.Errorf("%w: table %q has two column counts", ErrChangesetMalformed, name)
 			}
 			continue
 		}
@@ -203,9 +227,9 @@ func (r rawConn) readChangeset(cs []byte) ([]changesetTable, error) {
 		tables = append(tables, changesetTable{name: name, pk: pk})
 	}
 	if rc != sqlite3.SQLITE_DONE {
-		return nil, fmt.Errorf("%w (rc %d)", ErrChangesetMalformed, rc)
+		return nil, 0, r.malformedOrLocal(rc)
 	}
-	return tables, nil
+	return tables, ops, nil
 }
 
 // checkChangesetShape fails if the node lacks a table the changeset names, or

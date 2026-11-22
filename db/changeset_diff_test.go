@@ -129,8 +129,10 @@ func fuzzSeedChangesets(t testing.TB) [][]byte {
 	for _, stmts := range [][]string{
 		{"INSERT INTO p(v) VALUES('a'),('b')"},
 		{"INSERT INTO c(pid, v) VALUES(1, 'x')", "UPDATE p SET v = 'z' WHERE id = 1"},
-		{"INSERT INTO k VALUES('a', 1, 1.5), ('b', 2, NULL)", "DELETE FROM k WHERE a = 'a'"},
-		{"INSERT INTO s VALUES('x', 1), ('y', 2)", "UPDATE s SET n = n + 1"},
+		{"INSERT INTO k VALUES('a', 1, 1.5), ('b', 2, NULL)"},
+		{"DELETE FROM k WHERE a = 'a'", "UPDATE k SET v = 9.5 WHERE a = 'b'"},
+		{"INSERT INTO s VALUES('x', 1), ('y', 2)"},
+		{"UPDATE s SET n = n + 1"},
 		{"DELETE FROM p", "INSERT INTO p(id, v) VALUES(7, x'00ff')"},
 	} {
 		_, cs, err := a.ExecuteCapture(context.Background(), csRequest(false, stmts...), false)
