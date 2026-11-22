@@ -161,7 +161,7 @@ func Test_CommandProcessor_MalformedCommand(t *testing.T) {
 	for _, cmdType := range []proto.Command_Type{
 		proto.Command_COMMAND_TYPE_QUERY, proto.Command_COMMAND_TYPE_EXECUTE,
 		proto.Command_COMMAND_TYPE_EXECUTE_QUERY, proto.Command_COMMAND_TYPE_LOAD,
-		proto.Command_COMMAND_TYPE_LOAD_CHUNK, proto.Command_COMMAND_TYPE_CHANGESET,
+		proto.Command_COMMAND_TYPE_LOAD_CHUNK,
 	} {
 		t.Run(cmdType.String(), func(t *testing.T) {
 			data, err := command.Marshal(&proto.Command{Type: cmdType, SubCommand: invalid})

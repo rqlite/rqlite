@@ -13,7 +13,6 @@ import (
 	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
-	pb "google.golang.org/protobuf/proto"
 	sqlite3 "modernc.org/sqlite/lib"
 )
 
@@ -87,17 +86,12 @@ func Test_Changeset_LeaderFaults(t *testing.T) {
 		t.Fatal("a read was replicated")
 	}
 
-	// Each marshaling step can fail, and then nothing is replicated.
-	realPb, realCmd := pbMarshal, commandMarshal
-	defer func() { pbMarshal, commandMarshal = realPb, realCmd }()
-	pbMarshal = func(pb.Message) ([]byte, error) { return nil, boom }
-	if _, _, ok, err := s.changesetApply(ctx, insert, false, false); !errors.Is(err, boom) || !ok {
-		t.Fatalf("expected the first marshal error, got ok=%v %v", ok, err)
-	}
-	pbMarshal = realPb
+	// A failed marshal replicates nothing.
+	realCmd := commandMarshal
+	defer func() { commandMarshal = realCmd }()
 	commandMarshal = func(*proto.Command) ([]byte, error) { return nil, boom }
 	if _, _, ok, err := s.changesetApply(ctx, insert, false, false); !errors.Is(err, boom) || !ok {
-		t.Fatalf("expected the second marshal error, got ok=%v %v", ok, err)
+		t.Fatalf("expected the marshal error, got ok=%v %v", ok, err)
 	}
 	commandMarshal = realCmd
 	if s.raft.AppliedIndex() != idx || dumpStore(t, s) != empty {
@@ -105,12 +99,12 @@ func Test_Changeset_LeaderFaults(t *testing.T) {
 	}
 
 	// A conflict at apply time is reported, wraps the conflict, and is not fatal.
-	pbMarshal = func(m pb.Message) ([]byte, error) {
-		pbMarshal = realPb
+	commandMarshal = func(c *proto.Command) ([]byte, error) {
+		commandMarshal = realCmd
 		if _, err := s.db.Execute(&proto.Request{Statements: []*proto.Statement{{Sql: `INSERT INTO foo(id, v) VALUES(1, 'other')`}}}, false); err != nil {
 			t.Error(err)
 		}
-		return realPb(m)
+		return realCmd(c)
 	}
 	conflicting := executeRequestFromString(`INSERT INTO foo(id, v) VALUES(1, 'x')`, false, false).Request
 	_, _, ok, err := s.changesetApply(ctx, conflicting, false, false)
@@ -135,11 +129,7 @@ func Test_Changeset_LeaderFaults(t *testing.T) {
 
 func mustChangesetCommand(t *testing.T, cs []byte) []byte {
 	t.Helper()
-	sub, err := pb.Marshal(&proto.ChangesetRequest{Changeset: cs})
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := command.Marshal(&proto.Command{Type: proto.Command_COMMAND_TYPE_CHANGESET, SubCommand: sub})
+	data, err := command.Marshal(&proto.Command{Type: proto.Command_COMMAND_TYPE_CHANGESET, SubCommand: cs})
 	if err != nil {
 		t.Fatal(err)
 	}

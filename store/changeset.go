@@ -8,7 +8,6 @@ import (
 	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
-	pb "google.golang.org/protobuf/proto"
 )
 
 // Changeset replication.
@@ -33,12 +32,9 @@ import (
 // Raft's batching of concurrent writes; queued writes keep their batching
 // because a queue batch is one request.
 
-// The marshalers are variables so that tests can make them fail, and can run
-// code between recording a changeset and applying it.
-var (
-	pbMarshal      = pb.Marshal
-	commandMarshal = command.Marshal
-)
+// commandMarshal is a variable so that tests can make it fail, and can run code
+// between recording a changeset and applying it.
+var commandMarshal = command.Marshal
 
 // changesetApply records the request's changeset on the Leader and sends it
 // through Raft. It returns ok false, with nothing done, if the request must
@@ -66,13 +62,10 @@ func (s *Store) changesetApply(ctx context.Context, req *proto.Request, timings,
 		return results, s.raft.AppliedIndex(), true, nil
 	}
 
-	b, err := pbMarshal(&proto.ChangesetRequest{Changeset: cs})
-	if err != nil {
-		return nil, 0, true, err
-	}
-	b, err = commandMarshal(&proto.Command{
+	// The changeset is the whole sub-command: it is opaque to the log.
+	b, err := commandMarshal(&proto.Command{
 		Type:       proto.Command_COMMAND_TYPE_CHANGESET,
-		SubCommand: b,
+		SubCommand: cs,
 	})
 	if err != nil {
 		return nil, 0, true, err

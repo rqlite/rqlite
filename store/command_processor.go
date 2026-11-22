@@ -81,11 +81,8 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 		}
 		return cmd, ExecuteQueryResponses(r).Mutation(), &fsmExecuteQueryResponse{results: r, error: err}, nil
 	case proto.Command_COMMAND_TYPE_CHANGESET:
-		var cr proto.ChangesetRequest
-		if err := command.UnmarshalSubCommand(cmd, &cr); err != nil {
-			return cmd, false, nil, fmt.Errorf("failed to unmarshal changeset subcommand: %w", err)
-		}
-		err := db.ApplyChangeset(context.Background(), cr.Changeset)
+		// The sub-command is the changeset itself, not a message.
+		err := db.ApplyChangeset(context.Background(), cmd.SubCommand)
 		if _, ok := err.(*sql.FatalError); ok {
 			return cmd, false, nil, err
 		}

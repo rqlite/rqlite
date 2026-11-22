@@ -169,12 +169,6 @@ message Noop {
 	string id = 1;
 }
 
-// ChangesetRequest carries a SQLite session changeset, recorded on the leader
-// while executing a write request, to be applied verbatim by every node.
-message ChangesetRequest {
-	bytes changeset = 1;
-}
-
 message Command {
 	enum Type {
 		COMMAND_TYPE_UNKNOWN = 0;
@@ -185,6 +179,8 @@ message Command {
 		COMMAND_TYPE_JOIN = 5;
 		COMMAND_TYPE_EXECUTE_QUERY = 6;
 		COMMAND_TYPE_LOAD_CHUNK = 7;
+		// The sub_command is a SQLite session changeset, recorded on the leader
+		// while executing a write request, applied verbatim by every node.
 		COMMAND_TYPE_CHANGESET = 8;
 	}
 	Type type = 1;
