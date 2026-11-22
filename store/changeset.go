@@ -8,6 +8,8 @@ import (
 	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
+
+	"github.com/hashicorp/raft"
 )
 
 // Changeset replication.
@@ -40,8 +42,28 @@ var commandMarshal = command.Marshal
 // through Raft. It returns ok false, with nothing done, if the request must
 // take the statement path. The caller must hold s.changesetMu.
 func (s *Store) changesetApply(ctx context.Context, req *proto.Request, timings, unified bool) (results []*proto.ExecuteQueryResponse, idx uint64, ok bool, err error) {
+	results, idx, ok, _, err = s.changesetApplyLogged(ctx, req, timings, unified)
+	return results, idx, ok, err
+}
+
+// mapNotLeader returns the store's ErrNotLeader for Raft's, as the statement
+// path does.
+func mapNotLeader(err error) error {
+	if errors.Is(err, raft.ErrNotLeader) {
+		return ErrNotLeader
+	}
+	return err
+}
+
+// changesetApplyLogged is changesetApply, and also reports whether an entry
+// went through the Raft log and was applied without error: only then has the
+// request proved, like a STRONG read, that this node is still the Leader.
+func (s *Store) changesetApplyLogged(ctx context.Context, req *proto.Request, timings, unified bool) (results []*proto.ExecuteQueryResponse, idx uint64, ok, logged bool, err error) {
+	if s.ChangesetMaxSize > 0 {
+		s.db.SetChangesetMaxSize(s.ChangesetMaxSize)
+	}
 	if err := s.changesetCaughtUp(); err != nil {
-		return nil, 0, true, err
+		return nil, 0, true, false, mapNotLeader(err)
 	}
 
 	var cs []byte
@@ -51,15 +73,15 @@ func (s *Store) changesetApply(ctx context.Context, req *proto.Request, timings,
 		results, cs, err = s.db.ExecuteCapture(ctx, req, timings)
 	}
 	if errors.Is(err, sql.ErrNotCapturable) {
-		return nil, 0, false, nil
+		return nil, 0, false, false, nil
 	}
 	if err != nil {
-		return results, 0, true, err
+		return results, 0, true, false, err
 	}
 	if len(cs) == 0 {
 		// Nothing changed (a read-only request, a rolled-back transaction, or
 		// statements that matched no rows): nothing to replicate.
-		return results, s.raft.AppliedIndex(), true, nil
+		return results, s.raft.AppliedIndex(), true, false, nil
 	}
 
 	// The changeset is the whole sub-command: it is opaque to the log.
@@ -68,17 +90,17 @@ func (s *Store) changesetApply(ctx context.Context, req *proto.Request, timings,
 		SubCommand: cs,
 	})
 	if err != nil {
-		return nil, 0, true, err
+		return nil, 0, true, false, err
 	}
 	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
-		return nil, 0, true, af.Error()
+		return nil, 0, true, false, mapNotLeader(af.Error())
 	}
 	r := af.Response().(*fsmGenericResponse)
 	if r.error != nil {
-		return nil, af.Index(), true, fmt.Errorf("changeset apply: %w", r.error)
+		return nil, af.Index(), true, true, fmt.Errorf("changeset apply: %w", r.error)
 	}
-	return results, af.Index(), true, nil
+	return results, af.Index(), true, true, nil
 }
 
 // changesetCaughtUp makes sure the FSM has applied every entry committed before

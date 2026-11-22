@@ -431,6 +431,12 @@ type Store struct {
 	// of SQL text, for requests that can be. See changeset.go.
 	ChangesetReplication bool
 
+	// ChangesetMaxSize is the largest changeset the Leader will replicate, in
+	// bytes. Zero means db.DefaultChangesetMaxSize. A larger one fails the
+	// request with an error; it is never replicated as SQL text, which would
+	// re-introduce non-determinism.
+	ChangesetMaxSize int64
+
 	// Node-reaping configuration
 	ReapTimeout         time.Duration
 	ReapReadOnlyTimeout time.Duration
@@ -453,6 +459,7 @@ type Store struct {
 	numIgnoredJoins          int
 	numNoops                 atomic.Uint64
 	numChangesets            atomic.Uint64
+	numChangesetDivergences  atomic.Uint64 // Changesets this node refused to apply.
 	numSnapshots             atomic.Uint64
 	numSnapshotsSkipped      atomic.Uint64
 	numSnapshotsStart        atomic.Uint64
@@ -797,6 +804,9 @@ func (s *Store) Open() (retErr error) {
 		QueryLogger: s.dbConf.QueryLogger,
 	}, true)
 	s.dbCfg.MaxReaders = s.MaxReadOnlyConns
+	if s.cdcConf != nil && s.ChangesetReplication {
+		return errors.New("changeset replication cannot be combined with CDC: both need the connection's pre-update hook")
+	}
 	if s.cdcConf != nil {
 		s.cdcCollator, err = sql.NewCDCCollator(&ColumnNamesProvider{s})
 		if err != nil {
@@ -1735,9 +1745,9 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 	if s.ChangesetReplication && nRW > 0 {
 		s.changesetMu.Lock()
 		defer s.changesetMu.Unlock()
-		r, idx, ok, err := s.changesetApply(ctx, eqr.Request, eqr.Timings, true)
+		r, idx, ok, logged, err := s.changesetApplyLogged(ctx, eqr.Request, eqr.Timings, true)
 		if ok {
-			if nRO > 0 {
+			if nRO > 0 && logged && err == nil {
 				s.strongReadTerm.Store(readTerm)
 			}
 			return r, uint64(nRW), idx, err
@@ -1973,6 +1983,12 @@ func (s *Store) Load(ctx context.Context, lr *proto.LoadRequest) error {
 		return ErrNotReady
 	}
 
+	if s.ChangesetReplication {
+		// A load swaps the database. A changeset recorded before it would be
+		// applied to a database it was not recorded on.
+		s.changesetMu.Lock()
+		defer s.changesetMu.Unlock()
+	}
 	if err := s.load(lr); err != nil {
 		return err
 	}
@@ -2635,6 +2651,16 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.numNoops.Add(1)
 	case proto.Command_COMMAND_TYPE_CHANGESET:
 		s.numChangesets.Add(1)
+		if gr, ok := r.(*fsmGenericResponse); ok && gr.error != nil {
+			// The Leader recorded this changeset against its own database and this
+			// node cannot apply it: a conflict, a schema that differs, or a damaged
+			// entry. The node is left unchanged and up so it can be inspected, and
+			// the request fails; the log must not be trusted to be identical on
+			// every node until someone has looked.
+			s.numChangesetDivergences.Add(1)
+			s.logger.Printf("CHANGESET DIVERGENCE ALARM: index %d term %d refused on this node, which is left unchanged: %s",
+				l.Index, l.Term, gr.error)
+		}
 	case proto.Command_COMMAND_TYPE_LOAD:
 		// Swapping in a new database invalidates any existing snapshot.
 		if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {

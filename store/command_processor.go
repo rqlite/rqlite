@@ -86,8 +86,11 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 		if _, ok := err.(*sql.FatalError); ok {
 			return cmd, false, nil, err
 		}
-		// A conflict is not fatal: the apply was rolled back, so the node is
-		// unchanged, and every node holding the Leader's data refuses alike.
+		// A refused changeset (conflict, schema mismatch, damaged bytes) is not
+		// fatal: the apply was rolled back, so the node is unchanged, and it
+		// stays up for inspection. A deterministic refusal would otherwise
+		// crash every node at once. The request fails, and fsmApply raises the
+		// divergence alarm.
 		return cmd, err == nil, &fsmGenericResponse{error: err}, nil
 	case proto.Command_COMMAND_TYPE_LOAD:
 		var lr proto.LoadRequest

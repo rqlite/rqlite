@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
@@ -54,7 +53,7 @@ func Test_Changeset_FollowerRefuses(t *testing.T) {
 
 	// A write is recorded, then Raft refuses it.
 	before := dumpStore(t, f)
-	if _, _, _, err := f.changesetApply(ctx, insert, false, false); !errors.Is(err, raft.ErrNotLeader) {
+	if _, _, _, err := f.changesetApply(ctx, insert, false, false); !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("expected ErrNotLeader, got %v", err)
 	}
 	if dumpStore(t, f) != before {

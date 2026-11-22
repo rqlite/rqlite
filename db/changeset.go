@@ -497,6 +497,13 @@ func (r rawConn) applyChangeset(changeset []byte) (retErr error) {
 	if kind := *(*int32)(cPtr(conflict)); kind != 0 {
 		return fmt.Errorf("%w (kind %d, rc %d)", ErrChangesetConflict, kind, rc)
 	}
+	if rc&0xff == sqlite3.SQLITE_CORRUPT {
+		// The session extension reports a changeset it cannot parse as CORRUPT,
+		// which is the code of a damaged database file. The bytes are at fault,
+		// not the file: a damaged file fails every ordinary statement the same
+		// way and is classified as fatal there.
+		return fmt.Errorf("%w (rc %d)", ErrChangesetMalformed, rc)
+	}
 	return r.errstr(rc)
 }
 
