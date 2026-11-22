@@ -111,6 +111,39 @@ func Test_Round3_NoChangeRequestVerifiesLeader(t *testing.T) {
 	}
 }
 
+// A follower stops at the barrier: nothing is captured, and no answer is
+// returned even if the quorum check would pass.
+func Test_Changeset_Round3_BarrierFailureReturnsBeforeCapture(t *testing.T) {
+	stores := mustNewCluster(t, 2, true)
+	mustWrite(t, stores[0], `CREATE TABLE foo (id INTEGER PRIMARY KEY, v TEXT)`)
+	waitConverged(t, stores)
+	real := verifyLeader
+	defer func() { verifyLeader = real }()
+	verifyLeader = func(*Store) error { return nil }
+	read := executeRequestFromString(`SELECT 1`, false, false).Request
+	res, _, ok, err := stores[1].changesetApply(context.Background(), read, false, false)
+	if !errors.Is(err, ErrNotLeader) || !ok || res != nil {
+		t.Fatalf("expected ErrNotLeader before any capture, got res=%v ok=%v err=%v", res, ok, err)
+	}
+}
+
+// An entry that the apply refuses (damaged bytes) is an error to the caller,
+// and the entry was logged.
+func Test_Changeset_Round3_ApplyErrorIsReturned(t *testing.T) {
+	s := mustNewCluster(t, 1, true)[0]
+	execOn(t, s, "CREATE TABLE foo (id INTEGER PRIMARY KEY, v TEXT)")
+	realCmd := commandMarshal
+	defer func() { commandMarshal = realCmd }()
+	commandMarshal = func(*proto.Command) ([]byte, error) {
+		return mustChangesetCommand(t, []byte("T\x02\x01\x00foo\x00\x12\x00\x01")), nil
+	}
+	_, _, ok, logged, err := s.changesetApplyLogged(context.Background(),
+		executeRequestFromString(`INSERT INTO foo(v) VALUES('x')`, false, false).Request, false, false)
+	if err == nil || !ok || !logged {
+		t.Fatalf("expected an apply error from a logged entry, got ok=%v logged=%v err=%v", ok, logged, err)
+	}
+}
+
 // A Leader whose term changed between the capture and the proposal replicates
 // nothing.
 func Test_Round3_DeposedBetweenCaptureAndProposal(t *testing.T) {
