@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -79,6 +80,18 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 			return cmd, false, nil, err
 		}
 		return cmd, ExecuteQueryResponses(r).Mutation(), &fsmExecuteQueryResponse{results: r, error: err}, nil
+	case proto.Command_COMMAND_TYPE_CHANGESET:
+		var cr proto.ChangesetRequest
+		if err := command.UnmarshalSubCommand(cmd, &cr); err != nil {
+			return cmd, false, nil, fmt.Errorf("failed to unmarshal changeset subcommand: %w", err)
+		}
+		err := db.ApplyChangeset(context.Background(), cr.Changeset)
+		if _, ok := err.(*sql.FatalError); ok {
+			return cmd, false, nil, err
+		}
+		// A conflict is not fatal: the apply was rolled back, so the node is
+		// unchanged, and every node holding the Leader's data refuses alike.
+		return cmd, err == nil, &fsmGenericResponse{error: err}, nil
 	case proto.Command_COMMAND_TYPE_LOAD:
 		var lr proto.LoadRequest
 		if err := command.UnmarshalLoadRequest(cmd.SubCommand, &lr); err != nil {

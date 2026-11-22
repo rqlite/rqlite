@@ -427,11 +427,20 @@ type Store struct {
 	MaxReadOnlyConns         int
 	NoVerifyDB               bool
 
+	// ChangesetReplication makes the Leader replicate SQLite changesets instead
+	// of SQL text, for requests that can be. See changeset.go.
+	ChangesetReplication bool
+
 	// Node-reaping configuration
 	ReapTimeout         time.Duration
 	ReapReadOnlyTimeout time.Duration
 
 	numTrailingLogs uint64
+
+	// Serializes write requests on the Leader when ChangesetReplication is on,
+	// so nothing is applied between recording a changeset and applying it.
+	changesetMu        sync.Mutex
+	changesetBarrierAt atomic.Uint64 // Term in which the FSM was last known to be caught up.
 
 	// For whitebox testing
 	numLRUpgraded            atomic.Uint64
@@ -443,6 +452,7 @@ type Store struct {
 	numAutoOptimizes         int
 	numIgnoredJoins          int
 	numNoops                 atomic.Uint64
+	numChangesets            atomic.Uint64
 	numSnapshots             atomic.Uint64
 	numSnapshotsSkipped      atomic.Uint64
 	numSnapshotsStart        atomic.Uint64
@@ -1494,6 +1504,14 @@ func (s *Store) Execute(ctx context.Context, ex *proto.ExecuteRequest) ([]*proto
 	if !s.Ready() {
 		return nil, 0, ErrNotReady
 	}
+	if s.ChangesetReplication {
+		s.changesetMu.Lock()
+		defer s.changesetMu.Unlock()
+		r, idx, ok, err := s.changesetApply(ctx, ex.Request, ex.Timings, false)
+		if ok {
+			return r, idx, err
+		}
+	}
 	return s.execute(ex)
 }
 
@@ -1711,6 +1729,19 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 	// Enforce throttling since we're probably about to make changes to the database.
 	if err := s.throttler.Delay(ctx); err != nil {
 		return nil, 0, 0, err
+	}
+
+	// A STRONG read-only request must still go through the log.
+	if s.ChangesetReplication && nRW > 0 {
+		s.changesetMu.Lock()
+		defer s.changesetMu.Unlock()
+		r, idx, ok, err := s.changesetApply(ctx, eqr.Request, eqr.Timings, true)
+		if ok {
+			if nRO > 0 {
+				s.strongReadTerm.Store(readTerm)
+			}
+			return r, uint64(nRW), idx, err
+		}
 	}
 
 	// Send the request through consensus.
@@ -2602,6 +2633,8 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 	switch cmd.Type {
 	case proto.Command_COMMAND_TYPE_NOOP:
 		s.numNoops.Add(1)
+	case proto.Command_COMMAND_TYPE_CHANGESET:
+		s.numChangesets.Add(1)
 	case proto.Command_COMMAND_TYPE_LOAD:
 		// Swapping in a new database invalidates any existing snapshot.
 		if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {

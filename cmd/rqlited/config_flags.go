@@ -114,6 +114,10 @@ type Config struct {
 	AutoVacInterval time.Duration
 	// Period between automatic 'PRAGMA optimize'. Set to 0h to disable
 	AutoOptimizeInterval time.Duration
+
+	// ChangesetReplication makes the Leader replicate SQLite changesets instead
+	// of SQL text, for requests that can be.
+	ChangesetReplication bool
 	// Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions
 	ExtensionPaths []string
 	// Set to 'stderr' to log every SQL statement, or to path of query-log config file. If not set, query logging not enabled
@@ -211,6 +215,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	fs.IntVar(&config.DBMaxReadOnlyConns, "db-max-ro-conns", 256, "Maximum number of read-only connections to database")
 	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", mustParseDuration("0s"), "Period between automatic VACUUMs. If not set, not enabled")
+	fs.BoolVar(&config.ChangesetReplication, "changeset-replication", false, "EXPERIMENTAL: replicate SQLite changesets instead of SQL text for requests that support it. Every node in the cluster must run a version that understands changesets before this is enabled on any Leader candidate")
 	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), "Period between automatic 'PRAGMA optimize'. Set to 0h to disable")
 	var tmpExtensionPaths string
 	fs.StringVar(&tmpExtensionPaths, "extensions-path", "", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")

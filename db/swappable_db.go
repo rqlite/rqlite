@@ -126,6 +126,27 @@ func (s *SwappableDB) ExecuteWithContext(ctx context.Context, ex *command.Reques
 	return s.db.ExecuteWithContext(ctx, ex, xTime)
 }
 
+// ExecuteCapture calls ExecuteCapture on the underlying database.
+func (s *SwappableDB) ExecuteCapture(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, []byte, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.ExecuteCapture(ctx, req, xTime)
+}
+
+// RequestCapture calls RequestCapture on the underlying database.
+func (s *SwappableDB) RequestCapture(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, []byte, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.RequestCapture(ctx, req, xTime)
+}
+
+// ApplyChangeset calls ApplyChangeset on the underlying database.
+func (s *SwappableDB) ApplyChangeset(ctx context.Context, changeset []byte) error {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.ApplyChangeset(ctx, changeset)
+}
+
 // Query calls Query on the underlying database.
 func (s *SwappableDB) Query(q *command.Request, xTime bool) ([]*command.QueryRows, error) {
 	s.dbMu.RLock()
