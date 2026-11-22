@@ -280,6 +280,11 @@ func Test_Changeset_NotCapturable(t *testing.T) {
 	if _, _, err := a.ExecuteCapture(context.Background(), rb, false); !errors.Is(err, ErrNotCapturable) {
 		t.Fatalf("rollback_on_error: expected ErrNotCapturable, got %v", err)
 	}
+	fs := csRequest(false, "INSERT INTO foo VALUES(1)")
+	fs.Statements[0].ForceStall = true
+	if _, _, err := a.ExecuteCapture(context.Background(), fs, false); !errors.Is(err, ErrNotCapturable) {
+		t.Fatalf("force_stall: expected ErrNotCapturable, got %v", err)
+	}
 	// Nothing was applied by any of the refused captures.
 	if r := mustQuery(a, "SELECT count(*) FROM foo"); r[0].Values[0].Parameters[0].GetI() != 0 {
 		t.Fatal("refused capture changed the database")
