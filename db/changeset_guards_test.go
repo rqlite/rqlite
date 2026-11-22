@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +24,19 @@ func Test_Changeset_LengthGuard(t *testing.T) {
 	}
 	if err := checkChangesetLen(limit + 1); !errors.Is(err, ErrChangesetTooLarge) {
 		t.Fatalf("%d bytes must be refused, got %v", limit+1, err)
+	}
+}
+
+// The refusal comes before anything reads the bytes, so the pages of this slice
+// are never touched.
+func Test_Changeset_ApplyRefusesOversize(t *testing.T) {
+	if strconv.IntSize < 64 {
+		t.Skip("needs a 64-bit int")
+	}
+	a, _ := newPair(t, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+	err := a.ApplyChangeset(context.Background(), make([]byte, math.MaxInt32-63))
+	if !errors.Is(err, ErrChangesetTooLarge) {
+		t.Fatalf("expected ErrChangesetTooLarge, got %v", err)
 	}
 }
 
