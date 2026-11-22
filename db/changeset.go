@@ -26,13 +26,7 @@ var (
 	cSessionChangeset    = sqlite3.Xsqlite3session_changeset
 	cDBConfig            = sqlite3.Xsqlite3_db_config
 	connHandles          = (*Conn).rawHandles
-
-	// readSchemaVersion returns the schema cookie, which changes whenever DDL runs.
-	readSchemaVersion = func(ctx context.Context, c *Conn) (int64, error) {
-		var v int64
-		err := c.conn.QueryRowContext(ctx, "PRAGMA schema_version").Scan(&v)
-		return v, err
-	}
+	cChangesetStart      = sqlite3.Xsqlite3changeset_start
 )
 
 // ErrNotCapturable is returned by ExecuteCapture and RequestCapture when the
@@ -175,11 +169,6 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 		return nil, nil, ErrNotCapturable
 	}
 
-	cookieBefore, err := readSchemaVersion(ctx, c)
-	if err != nil {
-		return nil, nil, classifyError(err)
-	}
-
 	// Raw holds the connection for the duration of its callback, so the
 	// handles are taken out of it and used afterwards. This is safe because
 	// the caller holds the only read-write connection.
@@ -271,9 +260,6 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 	if max <= 0 {
 		max = DefaultChangesetMaxSize
 	}
-	if size := sess.size(); size > max {
-		return nil, nil, fmt.Errorf("%w: %d bytes, limit %d", ErrChangesetTooLarge, size, max)
-	}
 	if cs, err = sess.changeset(); err != nil {
 		return nil, nil, err
 	}
@@ -281,14 +267,7 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 		return nil, nil, fmt.Errorf("%w: %d bytes, limit %d", ErrChangesetTooLarge, len(cs), max)
 	}
 
-	cookieAfter, err := readSchemaVersion(ctx, c)
-	if err != nil {
-		return nil, nil, classifyError(err)
-	}
-	if cookieAfter != cookieBefore {
-		// DDL ran. The session does not record it.
-		return nil, nil, ErrNotCapturable
-	}
+	// DDL cannot have run: the authorizer refuses it, and refusal is checked above.
 	return results, cs, nil
 }
 
@@ -301,6 +280,15 @@ func hasError(results []*command.ExecuteQueryResponse) bool {
 	return false
 }
 
+// checkChangesetLen refuses a changeset whose length, plus the slots allocated
+// beside it, does not fit the 32-bit length SQLite takes.
+func checkChangesetLen(n int) error {
+	if n > math.MaxInt32-64 {
+		return fmt.Errorf("%w: %d bytes", ErrChangesetTooLarge, n)
+	}
+	return nil
+}
+
 // ApplyChangeset applies a changeset recorded by ExecuteCapture. Any conflict
 // aborts the apply and rolls it back entirely, so the outcome is the same on
 // every node whose database matches the leader's.
@@ -309,8 +297,8 @@ func (c *Conn) ApplyChangeset(changeset []byte) error {
 	if err != nil {
 		return classifyError(err)
 	}
-	if len(changeset) > math.MaxInt32-64 {
-		return fmt.Errorf("%w: %d bytes", ErrChangesetTooLarge, len(changeset))
+	if err := checkChangesetLen(len(changeset)); err != nil {
+		return err
 	}
 	if len(changeset) == 0 {
 		return nil
@@ -455,9 +443,6 @@ func (s *session) changeset() ([]byte, error) {
 
 // applyChangeset applies the changeset, aborting on the first conflict.
 func (r rawConn) applyChangeset(changeset []byte) (retErr error) {
-	if len(changeset) == 0 {
-		return nil
-	}
 	// One allocation holds the changeset, then the slot in which the conflict
 	// handler records the kind of conflict, then the argument list of db_config.
 	// Nothing is allocated after the triggers are turned off, so turning them

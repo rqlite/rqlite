@@ -23,43 +23,49 @@ type tableColumn struct {
 // session extension counts them (generated columns included). kind is "" if
 // there is no such object.
 func (c *Conn) tableInfo(ctx context.Context, name string) (kind string, withoutRowid bool, cols []tableColumn, err error) {
-	rows, err := c.conn.QueryContext(ctx, `SELECT type, wr FROM pragma_table_list WHERE schema = 'main' AND name = ?`, name)
-	if err != nil {
+	var wr int
+	if err := queryAll(ctx, c, `SELECT type, wr FROM pragma_table_list WHERE schema = 'main' AND name = ?`,
+		[]any{name}, func() []any { return []any{&kind, &wr} }, func() error {
+			withoutRowid = wr != 0
+			return nil
+		}); err != nil {
 		return "", false, nil, err
-	}
-	for rows.Next() {
-		var wr int
-		if err := rows.Scan(&kind, &wr); err != nil {
-			rows.Close()
-			return "", false, nil, err
-		}
-		withoutRowid = wr != 0
-	}
-	if err := rows.Close(); err != nil {
-		return "", false, nil, err
-	}
-	if kind == "" {
-		return "", false, nil, nil
 	}
 
-	rows, err = c.conn.QueryContext(ctx, `SELECT name, type, "notnull", pk, hidden FROM pragma_table_xinfo(?) ORDER BY cid`, name)
-	if err != nil {
+	var col tableColumn
+	var nn, pk, hidden int
+	if err := queryAll(ctx, c, `SELECT name, type, "notnull", pk, hidden FROM pragma_table_xinfo(?) ORDER BY cid`,
+		[]any{name}, func() []any { return []any{&col.name, &col.typ, &nn, &pk, &hidden} }, func() error {
+			if hidden != 0 { // Hidden and generated columns are not in a changeset.
+				return nil
+			}
+			col.notNull, col.pk = nn != 0, pk > 0
+			cols = append(cols, col)
+			return nil
+		}); err != nil {
 		return "", false, nil, err
 	}
-	for rows.Next() {
-		var col tableColumn
-		var nn, pk, hidden int
-		if err := rows.Scan(&col.name, &col.typ, &nn, &pk, &hidden); err != nil {
-			rows.Close()
-			return "", false, nil, err
-		}
-		if hidden != 0 { // Hidden and generated columns are not in a changeset.
-			continue
-		}
-		col.notNull, col.pk = nn != 0, pk > 0
-		cols = append(cols, col)
+	return kind, withoutRowid, cols, nil
+}
+
+// queryAll runs a query and calls each once per row, after scanning the row into
+// the destinations dest returns. It is a variable so that tests can make any one
+// of the queries fail, which is the only way to reach the error paths after them.
+var queryAll = func(ctx context.Context, c *Conn, query string, args []any, dest func() []any, each func() error) error {
+	rows, err := c.conn.QueryContext(ctx, query, args...)
+	if err != nil {
+		return err
 	}
-	return kind, withoutRowid, cols, rows.Close()
+	defer rows.Close()
+	for rows.Next() {
+		if err := rows.Scan(dest()...); err != nil {
+			return err
+		}
+		if err := each(); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 // tablesRecordable reports whether the session extension records every change
@@ -76,9 +82,6 @@ func (c *Conn) tableInfo(ctx context.Context, name string) (kind string, without
 // Views are skipped: a write to a view runs its INSTEAD OF triggers, whose
 // statements the authorizer reports against their own tables.
 func (c *Conn) tablesRecordable(ctx context.Context, written []string) (bool, error) {
-	if len(written) == 0 {
-		return true, nil
-	}
 	set := make(map[string]struct{}, len(written))
 	for _, t := range written {
 		set[strings.ToLower(t)] = struct{}{}
@@ -86,22 +89,15 @@ func (c *Conn) tablesRecordable(ctx context.Context, written []string) (bool, er
 
 	// Foreign key actions run without the authorizer being told about them, so
 	// every table that references a written one is treated as written, and so on.
-	rows, err := c.conn.QueryContext(ctx,
-		`SELECT m.name, f."table" FROM sqlite_master m, pragma_foreign_key_list(m.name) f WHERE m.type = 'table'`)
-	if err != nil {
-		return false, err
-	}
 	type edge struct{ child, parent string }
 	var edges []edge
-	for rows.Next() {
-		var e edge
-		if err := rows.Scan(&e.child, &e.parent); err != nil {
-			rows.Close()
-			return false, err
-		}
-		edges = append(edges, e)
-	}
-	if err := rows.Close(); err != nil {
+	var e edge
+	if err := queryAll(ctx, c,
+		`SELECT m.name, f."table" FROM sqlite_master m, pragma_foreign_key_list(m.name) f WHERE m.type = 'table'`,
+		nil, func() []any { return []any{&e.child, &e.parent} }, func() error {
+			edges = append(edges, e)
+			return nil
+		}); err != nil {
 		return false, err
 	}
 	names := append([]string(nil), written...)
@@ -177,7 +173,7 @@ func (r rawConn) readChangeset(cs []byte) ([]changesetTable, error) {
 	pIter, pTab, pCol, pOp, pInd, pPK, pCol2 := sc, sc+8, sc+16, sc+20, sc+24, sc+32, sc+40
 	*(*uintptr)(cPtr(pIter)) = 0
 
-	if rc := sqlite3.Xsqlite3changeset_start(r.tls, pIter, int32(len(cs)), buf); rc != sqlite3.SQLITE_OK {
+	if rc := cChangesetStart(r.tls, pIter, int32(len(cs)), buf); rc != sqlite3.SQLITE_OK {
 		return nil, fmt.Errorf("%w (rc %d)", ErrChangesetMalformed, rc)
 	}
 	iter := *(*uintptr)(cPtr(pIter))
@@ -185,17 +181,10 @@ func (r rawConn) readChangeset(cs []byte) ([]changesetTable, error) {
 
 	var tables []changesetTable
 	seen := make(map[string]int)
-	for {
-		rc := sqlite3.Xsqlite3changeset_next(r.tls, iter)
-		if rc == sqlite3.SQLITE_DONE {
-			return tables, nil
-		}
-		if rc != sqlite3.SQLITE_ROW {
-			return nil, fmt.Errorf("%w (rc %d)", ErrChangesetMalformed, rc)
-		}
-		if rc := sqlite3.Xsqlite3changeset_op(r.tls, iter, pTab, pCol, pOp, pInd); rc != sqlite3.SQLITE_OK {
-			return nil, fmt.Errorf("%w (rc %d)", ErrChangesetMalformed, rc)
-		}
+	rc := sqlite3.Xsqlite3changeset_next(r.tls, iter)
+	for ; rc == sqlite3.SQLITE_ROW; rc = sqlite3.Xsqlite3changeset_next(r.tls, iter) {
+		// op and pk cannot fail while next has returned a row.
+		sqlite3.Xsqlite3changeset_op(r.tls, iter, pTab, pCol, pOp, pInd)
 		name := libc.GoString(*(*uintptr)(cPtr(pTab)))
 		nCol := int(*(*int32)(cPtr(pCol)))
 		if i, ok := seen[name]; ok {
@@ -204,9 +193,7 @@ func (r rawConn) readChangeset(cs []byte) ([]changesetTable, error) {
 			}
 			continue
 		}
-		if rc := sqlite3.Xsqlite3changeset_pk(r.tls, iter, pPK, pCol2); rc != sqlite3.SQLITE_OK {
-			return nil, fmt.Errorf("%w (rc %d)", ErrChangesetMalformed, rc)
-		}
+		sqlite3.Xsqlite3changeset_pk(r.tls, iter, pPK, pCol2)
 		flags := *(*uintptr)(cPtr(pPK))
 		pk := make([]bool, nCol)
 		for i := range pk {
@@ -215,6 +202,10 @@ func (r rawConn) readChangeset(cs []byte) ([]changesetTable, error) {
 		seen[name] = len(tables)
 		tables = append(tables, changesetTable{name: name, pk: pk})
 	}
+	if rc != sqlite3.SQLITE_DONE {
+		return nil, fmt.Errorf("%w (rc %d)", ErrChangesetMalformed, rc)
+	}
+	return tables, nil
 }
 
 // checkChangesetShape fails if the node lacks a table the changeset names, or

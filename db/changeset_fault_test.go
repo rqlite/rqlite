@@ -140,27 +140,8 @@ func Test_Changeset_DBConfigFails(t *testing.T) {
 
 func Test_Changeset_SchemaVersion(t *testing.T) {
 	a, _ := newPair(t, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
-	boom := errors.New("boom")
-	real := readSchemaVersion
-	defer func() { readSchemaVersion = real }()
 
-	for _, failAt := range []int{1, 2} {
-		calls := 0
-		readSchemaVersion = func(ctx context.Context, c *Conn) (int64, error) {
-			calls++
-			if calls == failAt {
-				return 0, boom
-			}
-			return real(ctx, c)
-		}
-		_, _, err := a.ExecuteCapture(context.Background(), csRequest(false, "INSERT INTO foo VALUES(1)"), false)
-		if !errors.Is(err, boom) {
-			t.Fatalf("read %d: expected the read error, got %v", failAt, err)
-		}
-	}
-	readSchemaVersion = real
-
-	// DDL that gets past the keyword check is still caught, by the schema cookie.
+	// DDL that gets past the keyword check is still caught, by the authorizer.
 	prefixes := notCapturablePrefixes
 	notCapturablePrefixes = nil
 	defer func() { notCapturablePrefixes = prefixes }()
