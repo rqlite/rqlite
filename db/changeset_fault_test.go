@@ -236,13 +236,18 @@ func Test_Changeset_ClosedConnection(t *testing.T) {
 		t.Fatal("capture on a closed connection succeeded")
 	}
 
-	// With the schema read let through, it is taking the raw handles that fails.
-	real := readSchemaVersion
-	defer func() { readSchemaVersion = real }()
-	readSchemaVersion = func(context.Context, *Conn) (int64, error) { return 0, nil }
-	res, cs2, err := conn.ExecuteCapture(context.Background(), csRequest(false, "INSERT INTO foo VALUES(2)"), false)
-	if err == nil || res != nil || cs2 != nil {
-		t.Fatalf("expected only an error from the raw handles, got %v %v %v", res, cs2, err)
+	// A failure to take the raw handles is reported as it is, and nothing runs.
+	boom := errors.New("boom")
+	real := connHandles
+	defer func() { connHandles = real }()
+	connHandles = func(*Conn) (rawConn, error) { return rawConn{}, boom }
+	live, _ := newPair(t, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+	res, cs2, err := live.ExecuteCapture(context.Background(), csRequest(false, "INSERT INTO foo VALUES(2)"), false)
+	if !errors.Is(err, boom) || res != nil || cs2 != nil {
+		t.Fatalf("expected only the raw handles error, got %v %v %v", res, cs2, err)
+	}
+	if got := dump(t, live); got != "foo: []\n" {
+		t.Fatalf("unexpected contents %s", got)
 	}
 }
 

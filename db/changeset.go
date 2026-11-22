@@ -23,6 +23,7 @@ var (
 	cSessionAttach       = sqlite3.Xsqlite3session_attach
 	cSessionChangeset    = sqlite3.Xsqlite3session_changeset
 	cDBConfig            = sqlite3.Xsqlite3_db_config
+	connHandles          = (*Conn).rawHandles
 
 	// readSchemaVersion returns the schema cookie, which changes whenever DDL runs.
 	readSchemaVersion = func(ctx context.Context, c *Conn) (int64, error) {
@@ -142,7 +143,7 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 	// Raw holds the connection for the duration of its callback, so the
 	// handles are taken out of it and used afterwards. This is safe because
 	// the caller holds the only read-write connection.
-	raw, err := c.rawHandles()
+	raw, err := connHandles(c)
 	if err != nil {
 		return nil, nil, classifyError(err)
 	}
