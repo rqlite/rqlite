@@ -14,6 +14,24 @@ import (
 	sqlite3 "modernc.org/sqlite/lib"
 )
 
+// The C calls below are variables so that tests can make each one fail, which
+// is the only way to reach the error paths that follow them.
+var (
+	cMalloc              = libc.Xmalloc
+	cSessionCreate       = sqlite3.Xsqlite3session_create
+	cSessionObjectConfig = sqlite3.Xsqlite3session_object_config
+	cSessionAttach       = sqlite3.Xsqlite3session_attach
+	cSessionChangeset    = sqlite3.Xsqlite3session_changeset
+	cDBConfig            = sqlite3.Xsqlite3_db_config
+
+	// readSchemaVersion returns the schema cookie, which changes whenever DDL runs.
+	readSchemaVersion = func(ctx context.Context, c *Conn) (int64, error) {
+		var v int64
+		err := c.conn.QueryRowContext(ctx, "PRAGMA schema_version").Scan(&v)
+		return v, err
+	}
+)
+
 // ErrNotCapturable is returned by ExecuteCapture and RequestCapture when the
 // request cannot be replicated as a changeset. Nothing has been changed in the
 // database, and the caller must run the request through the statement path.
@@ -68,17 +86,10 @@ func firstKeyword(sql string) string {
 		sql = strings.TrimLeftFunc(sql, unicode.IsSpace)
 		switch {
 		case strings.HasPrefix(sql, "--"):
-			i := strings.IndexByte(sql, '\n')
-			if i < 0 {
-				return ""
-			}
-			sql = sql[i+1:]
+			// An unterminated comment leaves nothing, which yields "".
+			_, sql, _ = strings.Cut(sql, "\n")
 		case strings.HasPrefix(sql, "/*"):
-			i := strings.Index(sql[2:], "*/")
-			if i < 0 {
-				return ""
-			}
-			sql = sql[i+4:]
+			_, sql, _ = strings.Cut(sql[2:], "*/")
 		default:
 			end := strings.IndexFunc(sql, func(r rune) bool { return !unicode.IsLetter(r) })
 			if end < 0 {
@@ -123,8 +134,16 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 		return nil, nil, ErrNotCapturable
 	}
 
-	var cookieBefore int64
-	if err := c.conn.QueryRowContext(ctx, "PRAGMA schema_version").Scan(&cookieBefore); err != nil {
+	cookieBefore, err := readSchemaVersion(ctx, c)
+	if err != nil {
+		return nil, nil, classifyError(err)
+	}
+
+	// Raw holds the connection for the duration of its callback, so the
+	// handles are taken out of it and used afterwards. This is safe because
+	// the caller holds the only read-write connection.
+	raw, err := c.rawHandles()
+	if err != nil {
 		return nil, nil, classifyError(err)
 	}
 
@@ -150,16 +169,6 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 		}
 	}()
 
-	// Raw holds the connection for the duration of its callback, so the
-	// handles are taken out of it and used afterwards. This is safe because
-	// the caller holds the only read-write connection.
-	var raw rawConn
-	if err := c.conn.Raw(func(driverConn any) (err error) {
-		raw, err = rawHandles(driverConn)
-		return err
-	}); err != nil {
-		return nil, nil, err
-	}
 	sess, err := raw.newSession()
 	if err != nil {
 		return nil, nil, err
@@ -185,8 +194,8 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 		return results, nil, nil
 	}
 
-	var cookieAfter int64
-	if err := c.conn.QueryRowContext(ctx, "PRAGMA schema_version").Scan(&cookieAfter); err != nil {
+	cookieAfter, err := readSchemaVersion(ctx, c)
+	if err != nil {
 		return nil, nil, classifyError(err)
 	}
 	if cookieAfter != cookieBefore {
@@ -209,13 +218,21 @@ func hasError(results []*command.ExecuteQueryResponse) bool {
 // aborts the apply and rolls it back entirely, so the outcome is the same on
 // every node whose database matches the leader's.
 func (c *Conn) ApplyChangeset(changeset []byte) error {
-	return classifyError(c.conn.Raw(func(driverConn any) error {
-		raw, err := rawHandles(driverConn)
-		if err != nil {
-			return err
-		}
-		return raw.applyChangeset(changeset)
-	}))
+	raw, err := c.rawHandles()
+	if err != nil {
+		return classifyError(err)
+	}
+	return classifyError(raw.applyChangeset(changeset))
+}
+
+// rawHandles returns the raw SQLite handles behind the connection.
+func (c *Conn) rawHandles() (raw rawConn, err error) {
+	err = c.conn.Raw(func(driverConn any) error {
+		var err error
+		raw, err = rawHandles(driverConn)
+		return err
+	})
+	return raw, err
 }
 
 // ApplyChangeset applies a changeset to the database.
@@ -261,31 +278,29 @@ type session struct {
 // it, including tables created later. Tables without an explicit PRIMARY KEY are
 // recorded under their rowid.
 func (r rawConn) newSession() (*session, error) {
-	zMain, err := libc.CString("main")
-	if err != nil {
-		return nil, err
-	}
-	defer libc.Xfree(r.tls, zMain)
-
-	bp := libc.Xmalloc(r.tls, ptrSize)
+	// One buffer holds the output slot of the calls below and, after it, the
+	// NUL-terminated database name.
+	bp := cMalloc(r.tls, ptrSize+8)
 	if bp == 0 {
 		return nil, r.errstr(sqlite3.SQLITE_NOMEM)
 	}
 	defer libc.Xfree(r.tls, bp)
+	zMain := bp + uintptr(ptrSize)
+	copy(unsafeSlice(zMain, 5), "main\x00")
 	*(*uintptr)(cPtr(bp)) = 0
-	if rc := sqlite3.Xsqlite3session_create(r.tls, r.db, zMain, bp); rc != sqlite3.SQLITE_OK {
+	if rc := cSessionCreate(r.tls, r.db, zMain, bp); rc != sqlite3.SQLITE_OK {
 		return nil, r.errstr(rc)
 	}
 	s := &session{raw: r, ptr: *(*uintptr)(cPtr(bp))}
 
 	// Record tables that have no explicit PRIMARY KEY, using the rowid.
 	*(*int32)(cPtr(bp)) = 1
-	if rc := sqlite3.Xsqlite3session_object_config(r.tls, s.ptr, sqlite3.SQLITE_SESSION_OBJCONFIG_ROWID, bp); rc != sqlite3.SQLITE_OK {
+	if rc := cSessionObjectConfig(r.tls, s.ptr, sqlite3.SQLITE_SESSION_OBJCONFIG_ROWID, bp); rc != sqlite3.SQLITE_OK {
 		s.close()
 		return nil, r.errstr(rc)
 	}
 	// A NULL table name attaches every table.
-	if rc := sqlite3.Xsqlite3session_attach(r.tls, s.ptr, 0); rc != sqlite3.SQLITE_OK {
+	if rc := cSessionAttach(r.tls, s.ptr, 0); rc != sqlite3.SQLITE_OK {
 		s.close()
 		return nil, r.errstr(rc)
 	}
@@ -302,44 +317,43 @@ func (s *session) close() {
 // changeset returns the changeset recorded so far. It is nil if nothing changed.
 func (s *session) changeset() ([]byte, error) {
 	r := s.raw
-	bp := libc.Xmalloc(r.tls, 2*ptrSize)
+	bp := cMalloc(r.tls, 2*ptrSize)
 	if bp == 0 {
 		return nil, r.errstr(sqlite3.SQLITE_NOMEM)
 	}
 	defer libc.Xfree(r.tls, bp)
 	*(*int32)(cPtr(bp)) = 0
 	*(*uintptr)(cPtr(bp + uintptr(ptrSize))) = 0
-	rc := sqlite3.Xsqlite3session_changeset(r.tls, s.ptr, bp, bp+uintptr(ptrSize))
+	rc := cSessionChangeset(r.tls, s.ptr, bp, bp+uintptr(ptrSize))
 	if rc != sqlite3.SQLITE_OK {
 		return nil, r.errstr(rc)
 	}
 	n := int(*(*int32)(cPtr(bp)))
 	p := *(*uintptr)(cPtr(bp + uintptr(ptrSize)))
-	if p == 0 || n == 0 {
-		return nil, nil
-	}
+	// With nothing recorded, n is 0 and the copy below is nil; freeing a NULL p
+	// is a no-op.
 	defer sqlite3.Xsqlite3_free(r.tls, p)
 	return append([]byte(nil), unsafeSlice(p, n)...), nil
 }
 
 // applyChangeset applies the changeset, aborting on the first conflict.
-func (r rawConn) applyChangeset(changeset []byte) error {
+func (r rawConn) applyChangeset(changeset []byte) (retErr error) {
 	if len(changeset) == 0 {
 		return nil
 	}
-	buf := libc.Xmalloc(r.tls, types.Size_t(len(changeset)))
+	// One allocation holds the changeset, then the slot in which the conflict
+	// handler records the kind of conflict, then the argument list of db_config.
+	// Nothing is allocated after the triggers are turned off, so turning them
+	// back on cannot fail for lack of memory.
+	off := (len(changeset) + 7) &^ 7
+	buf := cMalloc(r.tls, types.Size_t(off+24))
 	if buf == 0 {
 		return r.errstr(sqlite3.SQLITE_NOMEM)
 	}
 	defer libc.Xfree(r.tls, buf)
 	copy(unsafeSlice(buf, len(changeset)), changeset)
-
-	// The conflict handler records the kind of conflict here.
-	conflict := libc.Xmalloc(r.tls, 4)
-	if conflict == 0 {
-		return r.errstr(sqlite3.SQLITE_NOMEM)
-	}
-	defer libc.Xfree(r.tls, conflict)
+	conflict := buf + uintptr(off)
+	va := conflict + 8
 	*(*int32)(cPtr(conflict)) = 0
 
 	// The session recorded every row the request changed, including those
@@ -347,10 +361,16 @@ func (r rawConn) applyChangeset(changeset []byte) error {
 	// during the apply would change those rows twice, so both are turned off:
 	// triggers on the connection for the duration of the apply, foreign key
 	// actions by the apply flag.
-	if err := r.setTriggersEnabled(false); err != nil {
+	if err := r.setTriggersEnabled(false, va); err != nil {
 		return err
 	}
-	defer r.setTriggersEnabled(true)
+	defer func() {
+		// A connection left with triggers off would skip them on every later
+		// write, so a failure here is not recoverable.
+		if err := r.setTriggersEnabled(true, va); err != nil && retErr == nil {
+			retErr = &FatalError{err: err}
+		}
+	}()
 
 	rc := sqlite3.Xsqlite3changeset_apply_v2(r.tls, r.db, int32(len(changeset)), buf, 0,
 		cFuncPointer(abortOnConflict), conflict, 0, 0, sqlite3.SQLITE_CHANGESETAPPLY_FKNOACTION)
@@ -363,20 +383,15 @@ func (r rawConn) applyChangeset(changeset []byte) error {
 	return r.errstr(rc)
 }
 
-// setTriggersEnabled turns trigger execution on the connection on or off.
-func (r rawConn) setTriggersEnabled(on bool) error {
-	const vaSlot = 8
-	bp := libc.Xmalloc(r.tls, types.Size_t(2*vaSlot))
-	if bp == 0 {
-		return r.errstr(sqlite3.SQLITE_NOMEM)
-	}
-	defer libc.Xfree(r.tls, bp)
+// setTriggersEnabled turns trigger execution on the connection on or off. va
+// is 16 bytes of C memory for db_config's argument list.
+func (r rawConn) setTriggersEnabled(on bool, va uintptr) error {
 	v := int32(0)
 	if on {
 		v = 1
 	}
-	rc := sqlite3.Xsqlite3_db_config(r.tls, r.db, sqlite3.SQLITE_DBCONFIG_ENABLE_TRIGGER,
-		libc.VaList(bp, v, uintptr(0)))
+	rc := cDBConfig(r.tls, r.db, sqlite3.SQLITE_DBCONFIG_ENABLE_TRIGGER,
+		libc.VaList(va, v, uintptr(0)))
 	if rc != sqlite3.SQLITE_OK {
 		return r.errstr(rc)
 	}
