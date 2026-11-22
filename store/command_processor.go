@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -86,11 +87,20 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 		if _, ok := err.(*sql.FatalError); ok {
 			return cmd, false, nil, err
 		}
-		// A refused changeset (conflict, schema mismatch, damaged bytes) is not
-		// fatal: the apply was rolled back, so the node is unchanged, and it
-		// stays up for inspection. A deterministic refusal would otherwise
-		// crash every node at once. The request fails, and fsmApply raises the
-		// divergence alarm.
+		// A conflict or a schema mismatch means this node's database is not the
+		// one the Leader recorded the changeset against: the node has diverged.
+		// The Leader verified the capture (row count, deferred foreign keys),
+		// so the changeset is exactly what the request did there. Skipping the
+		// entry would leave this node different for good while it keeps
+		// serving, so, like any other failure that can differ between nodes
+		// (see FatalError), it stops the process; the node recovers from a
+		// snapshot. The apply was rolled back first, so nothing is half done.
+		if errors.Is(err, sql.ErrChangesetConflict) || errors.Is(err, sql.ErrChangesetSchema) {
+			return cmd, false, nil, sql.NewFatalError(err)
+		}
+		// Damaged bytes are not fatal: the apply was rolled back, the node is
+		// unchanged and stays up for inspection, and the request fails with
+		// the divergence alarm raised by fsmApply.
 		return cmd, err == nil, &fsmGenericResponse{error: err}, nil
 	case proto.Command_COMMAND_TYPE_LOAD:
 		var lr proto.LoadRequest

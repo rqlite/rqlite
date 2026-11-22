@@ -218,6 +218,8 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 	var cs []byte
 	var runErr error
 	changesBefore := raw.totalChanges()
+	touched, unhook := raw.countTouchedRows()
+	defer unhook()
 	for _, stmt := range inner.Statements {
 		one := &command.Request{
 			Statements:     []*command.Statement{stmt},
@@ -284,15 +286,18 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 	}
 
 	// Verify, instead of predicting: the changeset must account for every row
-	// the request changed. A row the session did not record (a NULL key, a table
-	// it cannot see, a net-zero insert and delete) shows as fewer operations than
-	// changes, and a REPLACE that deleted another row shows as more. Anything that
-	// does not match exactly is replicated as statements.
+	// the request changed. It does when it has one operation per row change
+	// (this also covers WITHOUT ROWID tables, which fire no update hook), or one
+	// per distinct row touched, since the session folds several changes of one
+	// row into one operation. A row the session did not record (a NULL key, a
+	// table it cannot see, a net-zero insert and delete, an update to the same
+	// value) shows as fewer operations than either count, and a REPLACE that
+	// deleted another row shows as more. Anything else is replicated as statements.
 	ops, err := raw.changesetOps(cs)
 	if err != nil {
 		return nil, nil, err
 	}
-	if int64(ops) != raw.totalChanges()-changesBefore {
+	if int64(ops) != raw.totalChanges()-changesBefore && ops != touched.count() {
 		return nil, nil, ErrNotCapturable
 	}
 
@@ -374,13 +379,19 @@ func (c *Conn) ApplyChangeset(changeset []byte) error {
 		// of a damaged database file, and the walk above does not see every such
 		// case. Only the file can tell them apart: a damaged one is a failure of
 		// this node and fatal, a sound one means the bytes are at fault.
-		var verdict string
-		if qerr := c.conn.QueryRowContext(context.Background(), "PRAGMA quick_check(1)").Scan(&verdict); qerr != nil || verdict != "ok" {
+		if verdict, qerr := quickCheck(c); qerr != nil || verdict != "ok" {
 			return classifyError(err)
 		}
 		return fmt.Errorf("%w: %s", ErrChangesetMalformed, se.Error())
 	}
 	return classifyError(err)
+}
+
+// quickCheck is a variable so that a test can report a damaged file, which
+// cannot otherwise be produced on a live connection.
+var quickCheck = func(c *Conn) (verdict string, err error) {
+	err = c.conn.QueryRowContext(context.Background(), "PRAGMA quick_check(1)").Scan(&verdict)
+	return verdict, err
 }
 
 // rawHandles returns the raw SQLite handles behind the connection.

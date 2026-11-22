@@ -24,6 +24,12 @@ func Test_Config_Changeset(t *testing.T) {
 	}
 
 	c = base()
+	c.ChangesetMaxSize = 1 << 31
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "-changeset-max-size") {
+		t.Fatalf("a maximum beyond 32 bits must be refused by name, got %v", err)
+	}
+
+	c = base()
 	c.ChangesetReplication = true
 	c.ChangesetMaxSize = 1 << 20
 	if err := c.Validate(); err != nil {

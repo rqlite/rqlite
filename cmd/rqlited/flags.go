@@ -180,6 +180,10 @@ func (c *Config) Validate() error {
 	}
 
 	// Changeset replication OK?
+	if c.ChangesetMaxSize > 1<<31-65 {
+		// SQLite takes the length of a changeset as a 32-bit integer.
+		return errors.New("-changeset-max-size cannot exceed 2147483583 bytes")
+	}
 	if c.ChangesetMaxSize < 0 {
 		return errors.New("-changeset-max-size cannot be negative")
 	}

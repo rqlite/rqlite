@@ -38,6 +38,13 @@ import (
 // between recording a changeset and applying it.
 var commandMarshal = command.Marshal
 
+// currentTerm and verifyLeader are variables so that tests can depose the
+// Leader between the capture and the proposal, and make the quorum check fail.
+var (
+	currentTerm  = func(s *Store) uint64 { return s.raft.CurrentTerm() }
+	verifyLeader = func(s *Store) error { return s.VerifyLeader() }
+)
+
 // changesetApply records the request's changeset on the Leader and sends it
 // through Raft. It returns ok false, with nothing done, if the request must
 // take the statement path. The caller must hold s.changesetMu.
@@ -66,6 +73,16 @@ func (s *Store) changesetApplyLogged(ctx context.Context, req *proto.Request, ti
 		return nil, 0, true, false, mapNotLeader(err)
 	}
 
+	// Leadership is proved before the capture (the barrier above needs it) and
+	// checked again before the entry is proposed: a Leader deposed in between
+	// has recorded a changeset against a database the new Leader may have moved
+	// past. The term is compared, not only the state, so a node that lost and
+	// regained leadership during the capture is refused too. This narrows the
+	// window and does not close it: a deposition after the check and before the
+	// proposal is only caught by Raft itself, which refuses to commit the entry
+	// of a deposed Leader.
+	term := currentTerm(s)
+
 	var cs []byte
 	if unified {
 		results, cs, err = s.db.RequestCapture(ctx, req, timings)
@@ -80,8 +97,18 @@ func (s *Store) changesetApplyLogged(ctx context.Context, req *proto.Request, ti
 	}
 	if len(cs) == 0 {
 		// Nothing changed (a read-only request, a rolled-back transaction, or
-		// statements that matched no rows): nothing to replicate.
+		// statements that matched no rows): nothing to replicate. The results were
+		// read from this node's database, so they are only as good as its claim to
+		// lead: confirm it with a quorum, as a linearizable read does, before
+		// returning them. They are still not logged, so this is not a STRONG read.
+		if err := verifyLeader(s); err != nil {
+			return nil, 0, true, false, mapNotLeader(err)
+		}
 		return results, s.raft.AppliedIndex(), true, false, nil
+	}
+
+	if s.raft.State() != raft.Leader || currentTerm(s) != term {
+		return nil, 0, true, false, ErrNotLeader
 	}
 
 	// The changeset is the whole sub-command: it is opaque to the log.

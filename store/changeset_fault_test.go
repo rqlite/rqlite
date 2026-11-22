@@ -47,8 +47,10 @@ func Test_Changeset_FollowerRefuses(t *testing.T) {
 	if err := f.changesetCaughtUp(); err != nil {
 		t.Fatalf("barrier taken again within the term: %s", err)
 	}
-	if _, idx, ok, err := f.changesetApply(ctx, read, false, false); err != nil || !ok || idx != f.raft.AppliedIndex() {
-		t.Fatalf("a read must replicate nothing, got idx=%d ok=%v err=%v", idx, ok, err)
+	// A read replicates nothing, but it is confirmed by the leadership quorum
+	// before local rows are returned: a follower must refuse it.
+	if res, idx, ok, err := f.changesetApply(ctx, read, false, false); !errors.Is(err, ErrNotLeader) || !ok || idx != 0 || res != nil {
+		t.Fatalf("a read on a follower must be refused, got res=%v idx=%d ok=%v err=%v", res, idx, ok, err)
 	}
 
 	// A write is recorded, then Raft refuses it.
@@ -97,27 +99,8 @@ func Test_Changeset_LeaderFaults(t *testing.T) {
 		t.Fatal("a failed marshal changed something")
 	}
 
-	// A conflict at apply time is reported, wraps the conflict, and is not fatal.
-	commandMarshal = func(c *proto.Command) ([]byte, error) {
-		commandMarshal = realCmd
-		if _, err := s.db.Execute(&proto.Request{Statements: []*proto.Statement{{Sql: `INSERT INTO foo(id, v) VALUES(1, 'other')`}}}, false); err != nil {
-			t.Error(err)
-		}
-		return realCmd(c)
-	}
-	conflicting := executeRequestFromString(`INSERT INTO foo(id, v) VALUES(1, 'x')`, false, false).Request
-	_, _, ok, err := s.changesetApply(ctx, conflicting, false, false)
-	if !errors.Is(err, sql.ErrChangesetConflict) || !ok {
-		t.Fatalf("expected a conflict, got ok=%v %v", ok, err)
-	}
-	// The entry was applied, and refused by the FSM.
-	if got := s.numChangesets.Load(); got != n+1 {
-		t.Fatalf("expected the conflicting entry to be applied once, got %d", got)
-	}
-	mustWrite(t, s, `INSERT INTO foo(v) VALUES('after')`)
-	if got := s.numChangesets.Load(); got != n+2 {
-		t.Fatalf("expected the next write to apply, got %d changesets", got)
-	}
+	// A conflict at apply time is fatal on the node (the FSM stops the process,
+	// which a test cannot observe): Test_CommandProcessor_Changeset covers it.
 
 	// A database that cannot be recorded against is reported, not skipped.
 	s.db.Close()
@@ -167,7 +150,8 @@ func Test_CommandProcessor_Changeset(t *testing.T) {
 		}
 		// The same changeset again conflicts: not fatal, nothing mutated.
 		_, mutated, resp, err = processor.Process(data, db)
-		if err != nil || mutated || !errors.Is(resp.(*fsmGenericResponse).error, sql.ErrChangesetConflict) {
+		var fatal *sql.FatalError
+		if !errors.As(err, &fatal) || !errors.Is(err, sql.ErrChangesetConflict) || mutated || resp != nil {
 			t.Fatalf("conflict: mutated=%v %v %v", mutated, resp, err)
 		}
 	})

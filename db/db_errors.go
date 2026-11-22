@@ -161,6 +161,9 @@ type FatalError struct {
 	err error
 }
 
+// NewFatalError marks err as one the node must not continue past.
+func NewFatalError(err error) *FatalError { return &FatalError{err: err} }
+
 func (e *FatalError) Error() string { return e.err.Error() }
 
 // Unwrap returns the original error, including any SQLite error details.

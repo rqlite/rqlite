@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -213,6 +214,40 @@ func (r rawConn) registerUpdateHook(fn func(op int, dbName, tblName string, rowI
 		return
 	}
 	sqlite3.Xsqlite3_update_hook(r.tls, r.db, cFuncPointer(updateHookTrampoline), r.db)
+}
+
+// touchedRows counts the distinct rows of main-schema tables that INSERT, UPDATE
+// and DELETE statements touch, as the update hook reports them. A change the
+// session coalesces (an insert then an update of one row) is one row here.
+// REPLACE conflict deletes and WITHOUT ROWID tables fire no hook.
+type touchedRows struct {
+	seen map[touchedRow]struct{}
+}
+
+type touchedRow struct {
+	table string
+	rowid int64
+}
+
+func (t *touchedRows) count() int { return len(t.seen) }
+
+// countTouchedRows installs a hook that counts touched rows and still calls any
+// hook already installed. The returned function removes it and puts the earlier
+// one back.
+func (r rawConn) countTouchedRows() (*touchedRows, func()) {
+	t := &touchedRows{seen: make(map[touchedRow]struct{})}
+	updateHooks.RLock()
+	prev := updateHooks.m[r.db]
+	updateHooks.RUnlock()
+	r.registerUpdateHook(func(op int, dbName, tbl string, rowID int64) {
+		if dbName == "main" {
+			t.seen[touchedRow{strings.ToLower(tbl), rowID}] = struct{}{}
+		}
+		if prev != nil {
+			prev(op, dbName, tbl, rowID)
+		}
+	})
+	return t, func() { r.registerUpdateHook(prev) }
 }
 
 func updateHookTrampoline(_ *libc.TLS, pArg uintptr, op int32, zDb, zTbl uintptr, rowID int64) {
