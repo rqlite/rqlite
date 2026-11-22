@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
@@ -240,6 +241,8 @@ type DB struct {
 
 	allOptimized   bool
 	allOptimizedMu sync.Mutex
+
+	changesetMax atomic.Int64 // Largest changeset a capture may produce; see SetChangesetMaxSize.
 
 	logger *log.Logger
 }

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
+	"sync"
 	"unicode"
 	"unsafe"
 
@@ -37,6 +39,32 @@ var (
 // request cannot be replicated as a changeset. Nothing has been changed in the
 // database, and the caller must run the request through the statement path.
 var ErrNotCapturable = errors.New("request cannot be replicated as a changeset")
+
+// DefaultChangesetMaxSize is the largest changeset, in bytes, a Leader will
+// replicate when no other limit is set.
+const DefaultChangesetMaxSize = 32 << 20
+
+// ErrChangesetTooLarge is returned by ExecuteCapture and RequestCapture when the
+// changeset would exceed the configured maximum. The request is refused: the
+// statement path is not a fallback, because it would replicate the request's
+// non-deterministic SQL, which is what changesets exist to avoid.
+var ErrChangesetTooLarge = errors.New("changeset exceeds the maximum size")
+
+// ErrChangesetWithCDC is returned when a capture is attempted on a connection
+// that has a CDC preupdate hook. SQLite has one preupdate hook slot per
+// connection, the session extension takes it, and chaining the two is not
+// implemented.
+var ErrChangesetWithCDC = errors.New("changeset replication cannot be combined with CDC")
+
+// ErrChangesetMalformed is returned when bytes handed to ApplyChangeset are not a
+// valid changeset. The refusal is the same on every node, and the node's
+// database is not at fault, so it is not a FatalError.
+var ErrChangesetMalformed = errors.New("malformed changeset")
+
+// ErrChangesetSchema is returned when the changeset names a table this node
+// does not have, or has with another shape. SQLite would skip such a table and
+// report success.
+var ErrChangesetSchema = errors.New("changeset does not match this node's schema")
 
 // ErrChangesetConflict is returned when a changeset cannot be applied because it
 // conflicts with the contents of the database. The apply is aborted and rolled
@@ -116,6 +144,18 @@ func (c *Conn) ExecuteCapture(ctx context.Context, req *command.Request, xTime b
 	})
 }
 
+// captureAllowed refuses a capture on a database that has a CDC hook.
+func (db *DB) captureAllowed() error {
+	if db.cfg != nil && db.cfg.Writer.PreUpdateHook != nil {
+		return ErrChangesetWithCDC
+	}
+	return nil
+}
+
+// SetChangesetMaxSize sets the largest changeset the next captures may produce.
+// Zero or less selects DefaultChangesetMaxSize.
+func (db *DB) SetChangesetMaxSize(n int64) { db.changesetMax.Store(n) }
+
 // RequestCapture is ExecuteCapture for requests that may also contain reads.
 func (c *Conn) RequestCapture(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, []byte, error) {
 	return c.capture(ctx, req, func(r *command.Request) ([]*command.ExecuteQueryResponse, error) {
@@ -176,23 +216,69 @@ func (c *Conn) capture(ctx context.Context, req *command.Request, run func(*comm
 	}
 	defer sess.close()
 
-	var cs []byte
-	results, runErr := run(inner)
+	// The authorizer is removed before the session and the transaction are
+	// closed (deferred calls run last in, first out), since it refuses ROLLBACK.
+	auth := raw.installAuthorizer()
+	removeAuth := sync.OnceFunc(raw.removeAuthorizer)
+	defer removeAuth()
 
-	// A statement ended our transaction behind our back: the session holds
-	// changes the database no longer has.
-	if raw.autocommit() {
-		return nil, nil, ErrNotCapturable
+	// Statements run one at a time, and the moment the transaction is gone
+	// nothing more runs: a statement after it would commit on this node alone.
+	// The authorizer also refuses to prepare anything once the transaction has
+	// ended, which covers the tail of a multi-statement string.
+	var cs []byte
+	var runErr error
+	for _, stmt := range inner.Statements {
+		one := &command.Request{
+			Statements:     []*command.Statement{stmt},
+			DbTimeout:      inner.DbTimeout,
+			QualifyColumns: inner.QualifyColumns,
+		}
+		r, err := run(one)
+		results = append(results, r...)
+		if auth.refused() || raw.autocommit() {
+			// Nothing is committed: the transaction, if it still exists, is
+			// rolled back on return, and the caller takes the statement path.
+			return nil, nil, ErrNotCapturable
+		}
+		if err != nil {
+			runErr = err
+			break
+		}
+		if req.Transaction && hasError(r) {
+			// The statement path stops at the first error of a transaction.
+			break
+		}
 	}
+	removeAuth()
 	if runErr != nil {
 		return results, nil, runErr
-	}
-	if cs, err = sess.changeset(); err != nil {
-		return nil, nil, err
 	}
 	if req.Transaction && hasError(results) {
 		// The statement path rolls back the whole request on the first error.
 		return results, nil, nil
+	}
+
+	// The session records only what it can account for: main-schema tables with a
+	// key it can address. Anything else must take the statement path.
+	if ok, err := c.tablesRecordable(ctx, auth.writtenTables()); err != nil {
+		return nil, nil, classifyError(err)
+	} else if !ok {
+		return nil, nil, ErrNotCapturable
+	}
+
+	max := c.changesetMax
+	if max <= 0 {
+		max = DefaultChangesetMaxSize
+	}
+	if size := sess.size(); size > max {
+		return nil, nil, fmt.Errorf("%w: %d bytes, limit %d", ErrChangesetTooLarge, size, max)
+	}
+	if cs, err = sess.changeset(); err != nil {
+		return nil, nil, err
+	}
+	if int64(len(cs)) > max {
+		return nil, nil, fmt.Errorf("%w: %d bytes, limit %d", ErrChangesetTooLarge, len(cs), max)
 	}
 
 	cookieAfter, err := readSchemaVersion(ctx, c)
@@ -223,6 +309,21 @@ func (c *Conn) ApplyChangeset(changeset []byte) error {
 	if err != nil {
 		return classifyError(err)
 	}
+	if len(changeset) > math.MaxInt32-64 {
+		return fmt.Errorf("%w: %d bytes", ErrChangesetTooLarge, len(changeset))
+	}
+	if len(changeset) == 0 {
+		return nil
+	}
+	// Walk the whole changeset and compare its tables with ours before anything
+	// is applied: SQLite skips a table it cannot match and still reports success.
+	tables, err := raw.readChangeset(changeset)
+	if err != nil {
+		return err
+	}
+	if err := c.checkChangesetShape(context.Background(), tables); err != nil {
+		return classifyError(err)
+	}
 	return classifyError(raw.applyChangeset(changeset))
 }
 
@@ -250,22 +351,30 @@ func (db *DB) ApplyChangeset(ctx context.Context, changeset []byte) (retErr erro
 // ExecuteCapture records the changeset for an execute request. See
 // Conn.ExecuteCapture.
 func (db *DB) ExecuteCapture(ctx context.Context, req *command.Request, xTime bool) (results []*command.ExecuteQueryResponse, changeset []byte, retErr error) {
+	if err := db.captureAllowed(); err != nil {
+		return nil, nil, err
+	}
 	conn, err := db.AcquireWriter(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer func() { preserveFatalError(&retErr, conn.Close()) }()
+	conn.changesetMax = db.changesetMax.Load()
 	return conn.ExecuteCapture(ctx, req, xTime)
 }
 
 // RequestCapture records the changeset for a unified request. See
 // Conn.RequestCapture.
 func (db *DB) RequestCapture(ctx context.Context, req *command.Request, xTime bool) (results []*command.ExecuteQueryResponse, changeset []byte, retErr error) {
+	if err := db.captureAllowed(); err != nil {
+		return nil, nil, err
+	}
 	conn, err := db.AcquireWriter(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer func() { preserveFatalError(&retErr, conn.Close()) }()
+	conn.changesetMax = db.changesetMax.Load()
 	return conn.RequestCapture(ctx, req, xTime)
 }
 
@@ -294,9 +403,11 @@ func (r rawConn) newSession() (*session, error) {
 	}
 	s := &session{raw: r, ptr: *(*uintptr)(cPtr(bp))}
 
-	// Record tables that have no explicit PRIMARY KEY, using the rowid.
+	// Track the size of the changeset as it grows, so that an oversized one is
+	// refused before its buffer is built. Tables without an explicit PRIMARY KEY
+	// are not recorded at all (see tablesRecordable), so the rowid mode is off.
 	*(*int32)(cPtr(bp)) = 1
-	if rc := cSessionObjectConfig(r.tls, s.ptr, sqlite3.SQLITE_SESSION_OBJCONFIG_ROWID, bp); rc != sqlite3.SQLITE_OK {
+	if rc := cSessionObjectConfig(r.tls, s.ptr, sqlite3.SQLITE_SESSION_OBJCONFIG_SIZE, bp); rc != sqlite3.SQLITE_OK {
 		s.close()
 		return nil, r.errstr(rc)
 	}
@@ -313,6 +424,11 @@ func (s *session) close() {
 		sqlite3.Xsqlite3session_delete(s.raw.tls, s.ptr)
 		s.ptr = 0
 	}
+}
+
+// size returns the size in bytes of the changeset recorded so far.
+func (s *session) size() int64 {
+	return sqlite3.Xsqlite3session_changeset_size(s.raw.tls, s.ptr)
 }
 
 // changeset returns the changeset recorded so far. It is nil if nothing changed.
@@ -368,7 +484,7 @@ func (r rawConn) applyChangeset(changeset []byte) (retErr error) {
 	defer func() {
 		// A connection left with triggers off would skip them on every later
 		// write, so a failure here is not recoverable.
-		if err := r.setTriggersEnabled(true, va); err != nil && retErr == nil {
+		if err := r.setTriggersEnabled(true, va); err != nil {
 			retErr = &FatalError{err: err}
 		}
 	}()

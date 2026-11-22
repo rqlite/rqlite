@@ -171,8 +171,8 @@ func Test_Changeset_Replicates(t *testing.T) {
 		stmts  []string
 	}{
 		{
-			name:   "no explicit primary key",
-			schema: []string{"CREATE TABLE foo (a TEXT, b INTEGER)"},
+			name:   "text primary key",
+			schema: []string{"CREATE TABLE foo (a TEXT NOT NULL PRIMARY KEY, b INTEGER)"},
 			stmts: []string{
 				"INSERT INTO foo VALUES('x', random())",
 				"INSERT INTO foo VALUES('y', 2)",
@@ -197,7 +197,7 @@ func Test_Changeset_Replicates(t *testing.T) {
 		},
 		{
 			name:   "composite key and blob",
-			schema: []string{"CREATE TABLE foo (a INTEGER, b TEXT, c BLOB, d REAL, PRIMARY KEY(a, b))"},
+			schema: []string{"CREATE TABLE foo (a INTEGER NOT NULL, b TEXT NOT NULL, c BLOB, d REAL, PRIMARY KEY(a, b))"},
 			stmts: []string{
 				"INSERT INTO foo VALUES(1, 'x', randomblob(10), 1.5e300)",
 				"INSERT INTO foo VALUES(2, 'y', NULL, -0.0)",
