@@ -460,6 +460,8 @@ func createStore(cfg *Config, ln *tcp.Layer, extensions []string, cdcCfg *cdc.Co
 	str.CompressSnapTransport = cfg.CompressSnapTransport
 	str.MaxReadOnlyConns = cfg.DBMaxReadOnlyConns
 	str.NoVerifyDB = true
+	str.ChangesetReplication = cfg.ChangesetReplication
+	str.ChangesetMaxSize = int64(cfg.ChangesetMaxSize)
 
 	if store.IsNewNode(cfg.DataPath) {
 		log.Printf("no preexisting node state detected in %s, node may be bootstrapping", cfg.DataPath)

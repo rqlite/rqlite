@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
@@ -66,6 +67,9 @@ const (
 	numRTx                       = "request_transactions"
 	numBackupStepErrors          = "backup_step_errors"
 	numBackupStepDones           = "backup_step_dones"
+	numChangesetApplies          = "changeset_applies"
+	numChangesetCaptures         = "changeset_captures"
+	numChangesetFallbacks        = "changeset_fallbacks"
 	numBackupSleeps              = "backup_sleeps"
 	numPreupdates                = "preupdates"
 	numPreupdatesErrors          = "preupdates_errors"
@@ -173,6 +177,9 @@ func ResetStats() {
 	stats.Add(numRTx, 0)
 	stats.Add(numBackupStepErrors, 0)
 	stats.Add(numBackupStepDones, 0)
+	stats.Add(numChangesetApplies, 0)
+	stats.Add(numChangesetCaptures, 0)
+	stats.Add(numChangesetFallbacks, 0)
 	stats.Add(numBackupSleeps, 0)
 	stats.Add(numPreupdates, 0)
 	stats.Add(numPreupdatesErrors, 0)
@@ -234,6 +241,8 @@ type DB struct {
 
 	allOptimized   bool
 	allOptimizedMu sync.Mutex
+
+	changesetMax atomic.Int64 // Largest changeset a capture may produce; see SetChangesetMaxSize.
 
 	logger *log.Logger
 }

@@ -179,6 +179,18 @@ func (c *Config) Validate() error {
 		return errors.New("CDC cannot be enabled on non-voting nodes")
 	}
 
+	// Changeset replication OK?
+	if c.ChangesetMaxSize > 1<<31-65 {
+		// SQLite takes the length of a changeset as a 32-bit integer.
+		return errors.New("-changeset-max-size cannot exceed 2147483583 bytes")
+	}
+	if c.ChangesetMaxSize < 0 {
+		return errors.New("-changeset-max-size cannot be negative")
+	}
+	if c.ChangesetReplication && c.CDCConfig != "" {
+		return errors.New("-changeset-replication cannot be combined with -cdc-config: both need the connection's pre-update hook, and chaining them is not supported")
+	}
+
 	// OTLP metrics reporting OK?
 	if !bothUnsetSet(c.OTLPCert, c.OTLPKey) {
 		return fmt.Errorf("either both -%s and -%s must be set, or neither", OTLPCertFlag, OTLPKeyFlag)

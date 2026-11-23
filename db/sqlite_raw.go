@@ -3,6 +3,8 @@ package db
 import (
 	"fmt"
 	"reflect"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -103,6 +105,30 @@ func (r rawConn) autocommit() bool {
 	return sqlite3.Xsqlite3_get_autocommit(r.tls, r.db) != 0
 }
 
+// totalChanges returns the number of rows inserted, updated and deleted by
+// completed statements on the connection since it was opened. It counts the rows
+// changed by triggers and by foreign key actions, and not the rows deleted by
+// REPLACE conflict resolution.
+func (r rawConn) totalChanges() int64 {
+	return int64(sqlite3.Xsqlite3_total_changes64(r.tls, r.db))
+}
+
+// dbstatusDeferredFKs is SQLITE_DBSTATUS_DEFERRED_FKS, which modernc does not name.
+const dbstatusDeferredFKs = 10
+
+// deferredFKs returns the number of foreign key violations the open transaction
+// has not yet resolved: the count COMMIT checks, and refuses to commit while it
+// is not zero.
+func (r rawConn) deferredFKs() int {
+	// The slots are on the heap, which the Go runtime never moves.
+	slots := new([2]int32)
+	sqlite3.Xsqlite3_db_status(r.tls, r.db, dbstatusDeferredFKs,
+		uintptr(unsafe.Pointer(&slots[0])), uintptr(unsafe.Pointer(&slots[1])), 0)
+	n := int(slots[0])
+	runtime.KeepAlive(slots)
+	return n
+}
+
 // stmtReadOnly prepares query and reports whether SQLite considers it read-only.
 func (r rawConn) stmtReadOnly(query string) (bool, error) {
 	zSQL, err := libc.CString(query)
@@ -188,6 +214,40 @@ func (r rawConn) registerUpdateHook(fn func(op int, dbName, tblName string, rowI
 		return
 	}
 	sqlite3.Xsqlite3_update_hook(r.tls, r.db, cFuncPointer(updateHookTrampoline), r.db)
+}
+
+// touchedRows counts the distinct rows of main-schema tables that INSERT, UPDATE
+// and DELETE statements touch, as the update hook reports them. A change the
+// session coalesces (an insert then an update of one row) is one row here.
+// REPLACE conflict deletes and WITHOUT ROWID tables fire no hook.
+type touchedRows struct {
+	seen map[touchedRow]struct{}
+}
+
+type touchedRow struct {
+	table string
+	rowid int64
+}
+
+func (t *touchedRows) count() int { return len(t.seen) }
+
+// countTouchedRows installs a hook that counts touched rows and still calls any
+// hook already installed. The returned function removes it and puts the earlier
+// one back.
+func (r rawConn) countTouchedRows() (*touchedRows, func()) {
+	t := &touchedRows{seen: make(map[touchedRow]struct{})}
+	updateHooks.RLock()
+	prev := updateHooks.m[r.db]
+	updateHooks.RUnlock()
+	r.registerUpdateHook(func(op int, dbName, tbl string, rowID int64) {
+		if dbName == "main" {
+			t.seen[touchedRow{strings.ToLower(tbl), rowID}] = struct{}{}
+		}
+		if prev != nil {
+			prev(op, dbName, tbl, rowID)
+		}
+	})
+	return t, func() { r.registerUpdateHook(prev) }
 }
 
 func updateHookTrampoline(_ *libc.TLS, pArg uintptr, op int32, zDb, zTbl uintptr, rowID int64) {

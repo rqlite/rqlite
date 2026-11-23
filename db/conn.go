@@ -21,6 +21,8 @@ import (
 type Conn struct {
 	conn   *sql.Conn
 	logger *log.Logger
+
+	changesetMax int64 // Largest changeset a capture may produce; 0 means the default.
 }
 
 func newConn(conn *sql.Conn, logger *log.Logger) *Conn {

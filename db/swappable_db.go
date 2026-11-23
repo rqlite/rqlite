@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
@@ -25,6 +26,7 @@ type SwappableDB struct {
 	cfg           *Config
 	checkpointMgr *CheckpointManager
 	dbMu          sync.RWMutex
+	changesetMax  atomic.Int64
 }
 
 // OpenSwappable returns a new SwappableDB instance, which opens the database
@@ -124,6 +126,33 @@ func (s *SwappableDB) ExecuteWithContext(ctx context.Context, ex *command.Reques
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.db.ExecuteWithContext(ctx, ex, xTime)
+}
+
+// SetChangesetMaxSize sets the largest changeset a capture may produce, in
+// bytes. It survives Swap. Zero or less means DefaultChangesetMaxSize.
+func (s *SwappableDB) SetChangesetMaxSize(n int64) { s.changesetMax.Store(n) }
+
+// ExecuteCapture calls ExecuteCapture on the underlying database.
+func (s *SwappableDB) ExecuteCapture(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, []byte, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	s.db.SetChangesetMaxSize(s.changesetMax.Load())
+	return s.db.ExecuteCapture(ctx, req, xTime)
+}
+
+// RequestCapture calls RequestCapture on the underlying database.
+func (s *SwappableDB) RequestCapture(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, []byte, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	s.db.SetChangesetMaxSize(s.changesetMax.Load())
+	return s.db.RequestCapture(ctx, req, xTime)
+}
+
+// ApplyChangeset calls ApplyChangeset on the underlying database.
+func (s *SwappableDB) ApplyChangeset(ctx context.Context, changeset []byte) error {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.ApplyChangeset(ctx, changeset)
 }
 
 // Query calls Query on the underlying database.

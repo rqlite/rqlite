@@ -179,6 +179,9 @@ message Command {
 		COMMAND_TYPE_JOIN = 5;
 		COMMAND_TYPE_EXECUTE_QUERY = 6;
 		COMMAND_TYPE_LOAD_CHUNK = 7;
+		// The sub_command is a SQLite session changeset, recorded on the leader
+		// while executing a write request, applied verbatim by every node.
+		COMMAND_TYPE_CHANGESET = 8;
 	}
 	Type type = 1;
 	bytes sub_command = 2;

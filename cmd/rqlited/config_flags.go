@@ -114,6 +114,12 @@ type Config struct {
 	AutoVacInterval time.Duration
 	// Period between automatic 'PRAGMA optimize'. Set to 0h to disable
 	AutoOptimizeInterval time.Duration
+
+	// ChangesetReplication makes the Leader replicate SQLite changesets instead
+	// of SQL text, for requests that can be.
+	ChangesetReplication bool
+	// ChangesetMaxSize is the largest changeset replicated, in bytes. 0 means the default.
+	ChangesetMaxSize int
 	// Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions
 	ExtensionPaths []string
 	// Set to 'stderr' to log every SQL statement, or to path of query-log config file. If not set, query logging not enabled
@@ -211,6 +217,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	fs.IntVar(&config.DBMaxReadOnlyConns, "db-max-ro-conns", 256, "Maximum number of read-only connections to database")
 	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", mustParseDuration("0s"), "Period between automatic VACUUMs. If not set, not enabled")
+	fs.BoolVar(&config.ChangesetReplication, "changeset-replication", false, "EXPERIMENTAL: replicate SQLite changesets instead of SQL text for requests that support it. Every node in the cluster must run a version that understands changesets before this is enabled on any Leader candidate")
 	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), "Period between automatic 'PRAGMA optimize'. Set to 0h to disable")
 	var tmpExtensionPaths string
 	fs.StringVar(&tmpExtensionPaths, "extensions-path", "", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
@@ -222,6 +229,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.IntVar(&config.WriteQueueRetry, "write-queue-retry", 1, "How many times to retry a queued write")
 	fs.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
 	fs.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
+	fs.IntVar(&config.ChangesetMaxSize, "changeset-max-size", 0, "EXPERIMENTAL: largest changeset, in bytes, a request may produce under -changeset-replication. A request above it fails. 0 means 32 MiB")
 	fs.StringVar(&config.CDCConfig, "cdc-config", "", "Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled")
 	fs.StringVar(&config.CDCAs, "cdc-as", "", "Username in authentication file to perform internode CDC operations. If not set, performs CDC operations anonymously")
 	fs.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")

@@ -555,6 +555,28 @@ If set to a non-zero interval rqlite will execute PRAGMA OPTIMIZE on the specifi
 default = "24h"
 
 [[flags]]
+name = "ChangesetReplication"
+cli = "changeset-replication"
+section = "SQLite database"
+type = "bool"
+short_help = "EXPERIMENTAL: replicate SQLite changesets instead of SQL text for requests that support it"
+long_help = """
+Every node in the cluster must run a version that understands changesets before this is enabled on any Leader candidate. It cannot be combined with -cdc-config.
+"""
+default = "false"
+
+[[flags]]
+name = "ChangesetMaxSize"
+cli = "changeset-max-size"
+section = "SQLite database"
+type = "int"
+short_help = "EXPERIMENTAL: largest changeset, in bytes, a request may produce under -changeset-replication"
+long_help = """
+A request whose changeset is larger fails; it is never replicated as SQL text. 0 means 32 MiB.
+"""
+default = "0"
+
+[[flags]]
 name = "ExtensionPaths"
 cli = "extensions-path"
 section = "SQLite database"

@@ -427,11 +427,26 @@ type Store struct {
 	MaxReadOnlyConns         int
 	NoVerifyDB               bool
 
+	// ChangesetReplication makes the Leader replicate SQLite changesets instead
+	// of SQL text, for requests that can be. See changeset.go.
+	ChangesetReplication bool
+
+	// ChangesetMaxSize is the largest changeset the Leader will replicate, in
+	// bytes. Zero means db.DefaultChangesetMaxSize. A larger one fails the
+	// request with an error; it is never replicated as SQL text, which would
+	// re-introduce non-determinism.
+	ChangesetMaxSize int64
+
 	// Node-reaping configuration
 	ReapTimeout         time.Duration
 	ReapReadOnlyTimeout time.Duration
 
 	numTrailingLogs uint64
+
+	// Serializes write requests on the Leader when ChangesetReplication is on,
+	// so nothing is applied between recording a changeset and applying it.
+	changesetMu        sync.Mutex
+	changesetBarrierAt atomic.Uint64 // Term in which the FSM was last known to be caught up.
 
 	// For whitebox testing
 	numLRUpgraded            atomic.Uint64
@@ -443,6 +458,8 @@ type Store struct {
 	numAutoOptimizes         int
 	numIgnoredJoins          int
 	numNoops                 atomic.Uint64
+	numChangesets            atomic.Uint64
+	numChangesetDivergences  atomic.Uint64 // Changesets this node refused to apply.
 	numSnapshots             atomic.Uint64
 	numSnapshotsSkipped      atomic.Uint64
 	numSnapshotsStart        atomic.Uint64
@@ -787,6 +804,9 @@ func (s *Store) Open() (retErr error) {
 		QueryLogger: s.dbConf.QueryLogger,
 	}, true)
 	s.dbCfg.MaxReaders = s.MaxReadOnlyConns
+	if s.cdcConf != nil && s.ChangesetReplication {
+		return errors.New("changeset replication cannot be combined with CDC: both need the connection's pre-update hook")
+	}
 	if s.cdcConf != nil {
 		s.cdcCollator, err = sql.NewCDCCollator(&ColumnNamesProvider{s})
 		if err != nil {
@@ -1494,6 +1514,14 @@ func (s *Store) Execute(ctx context.Context, ex *proto.ExecuteRequest) ([]*proto
 	if !s.Ready() {
 		return nil, 0, ErrNotReady
 	}
+	if s.ChangesetReplication {
+		s.changesetMu.Lock()
+		defer s.changesetMu.Unlock()
+		r, idx, ok, err := s.changesetApply(ctx, ex.Request, ex.Timings, false)
+		if ok {
+			return r, idx, err
+		}
+	}
 	return s.execute(ex)
 }
 
@@ -1711,6 +1739,19 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 	// Enforce throttling since we're probably about to make changes to the database.
 	if err := s.throttler.Delay(ctx); err != nil {
 		return nil, 0, 0, err
+	}
+
+	// A STRONG read-only request must still go through the log.
+	if s.ChangesetReplication && nRW > 0 {
+		s.changesetMu.Lock()
+		defer s.changesetMu.Unlock()
+		r, idx, ok, logged, err := s.changesetApplyLogged(ctx, eqr.Request, eqr.Timings, true)
+		if ok {
+			if nRO > 0 && logged && err == nil {
+				s.strongReadTerm.Store(readTerm)
+			}
+			return r, uint64(nRW), idx, err
+		}
 	}
 
 	// Send the request through consensus.
@@ -1942,6 +1983,12 @@ func (s *Store) Load(ctx context.Context, lr *proto.LoadRequest) error {
 		return ErrNotReady
 	}
 
+	if s.ChangesetReplication {
+		// A load swaps the database. A changeset recorded before it would be
+		// applied to a database it was not recorded on.
+		s.changesetMu.Lock()
+		defer s.changesetMu.Unlock()
+	}
 	if err := s.load(lr); err != nil {
 		return err
 	}
@@ -2602,6 +2649,18 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 	switch cmd.Type {
 	case proto.Command_COMMAND_TYPE_NOOP:
 		s.numNoops.Add(1)
+	case proto.Command_COMMAND_TYPE_CHANGESET:
+		s.numChangesets.Add(1)
+		if gr, ok := r.(*fsmGenericResponse); ok && gr.error != nil {
+			// The Leader recorded this changeset against its own database and this
+			// node cannot apply it: a conflict, a schema that differs, or a damaged
+			// entry. The node is left unchanged and up so it can be inspected, and
+			// the request fails; the log must not be trusted to be identical on
+			// every node until someone has looked.
+			s.numChangesetDivergences.Add(1)
+			s.logger.Printf("CHANGESET DIVERGENCE ALARM: index %d term %d refused on this node, which is left unchanged: %s",
+				l.Index, l.Term, gr.error)
+		}
 	case proto.Command_COMMAND_TYPE_LOAD:
 		// Swapping in a new database invalidates any existing snapshot.
 		if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
