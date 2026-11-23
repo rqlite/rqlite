@@ -5,6 +5,7 @@ import (
 	"errors"
 	"expvar"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -1261,6 +1262,32 @@ func Test_MultiNodeJoinNonVoter_ChangedIDAddrSame(t *testing.T) {
 		if node.ID == newID && (node.Addr != s1.Addr() || node.Suffrage != proto.Suffrage_NON_VOTER) {
 			t.Fatalf("non-voter has incorrect address or suffrage post rejoin")
 		}
+	}
+
+	// A join must not replace a node of a different type, whether the match
+	// is by ID or by address, and must leave the cluster unchanged.
+	for _, tt := range []struct {
+		name  string
+		id    string
+		addr  string
+		voter bool
+	}{
+		{"non-voter with voter's ID", s0.ID(), "127.0.0.1:1", false},
+		{"non-voter with voter's address", "fresh", s0.Addr(), false},
+		{"non-voter with voter's ID and non-voter's address", s0.ID(), s1.Addr(), false},
+		{"voter with non-voter's ID", newID, "127.0.0.1:1", true},
+		{"voter with non-voter's address", "fresh", s1.Addr(), true},
+	} {
+		if err := s0.Join(joinRequest(tt.id, tt.addr, tt.voter)); !errors.Is(err, ErrJoinSuffrageMismatch) {
+			t.Fatalf("%s: expected ErrJoinSuffrageMismatch, got %v", tt.name, err)
+		}
+	}
+	nodesPost, err := s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes post rejected joins: %s", err.Error())
+	}
+	if !reflect.DeepEqual(nodes, nodesPost) {
+		t.Fatalf("cluster changed by rejected joins\nexp: %v\ngot: %v", nodes, nodesPost)
 	}
 }
 
