@@ -8,7 +8,7 @@ import (
 )
 
 func Test_FSM_ConfigurationIndex(t *testing.T) {
-	fsm := NewFSM(nil)
+	fsm := NewFSM(&Store{})
 	cfgIndex := uint64(1234)
 	fsm.StoreConfiguration(cfgIndex, raft.Configuration{})
 	if exp, got := cfgIndex, fsm.ConfigurationIndex(); exp != got {

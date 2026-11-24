@@ -379,6 +379,9 @@ type Store struct {
 	fsmTerm       atomic.Uint64
 	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
 
+	// Latest log entry index which is a Configuration entry.
+	cfgIndex atomic.Uint64
+
 	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
 	appendedAtTime *rsync.AtomicTime
@@ -1103,6 +1106,12 @@ func (s *Store) AppliedIndex() uint64 {
 	return s.raft.AppliedIndex()
 }
 
+// ConfigurationIndex returns the index of the last Raft log entry containing
+// a Configuration Log.
+func (s *Store) ConfigurationIndex() uint64 {
+	return s.cfgIndex.Load()
+}
+
 // IsLeader is used to determine if the current node is the cluster leader
 func (s *Store) IsLeader() bool {
 	if !s.open.Is() {
@@ -1423,15 +1432,16 @@ func (s *Store) Stats() (map[string]any, error) {
 	}
 
 	status := map[string]any{
-		"open":             s.open.Is(),
-		"node_id":          s.raftID,
-		"raft":             raftStats,
-		"fsm_index":        s.fsmIdx.Load(),
-		"fsm_term":         s.fsmTerm.Load(),
-		"fsm_update_time":  s.fsmUpdateTime.Load(),
-		"strong_read_term": s.strongReadTerm.Load(),
-		"db_applied_index": s.dbAppliedIdx.Load(),
-		"addr":             s.Addr(),
+		"open":                s.open.Is(),
+		"node_id":             s.raftID,
+		"raft":                raftStats,
+		"fsm_index":           s.fsmIdx.Load(),
+		"fsm_term":            s.fsmTerm.Load(),
+		"fsm_update_time":     s.fsmUpdateTime.Load(),
+		"strong_read_term":    s.strongReadTerm.Load(),
+		"db_applied_index":    s.dbAppliedIdx.Load(),
+		"configuration_index": s.cfgIndex.Load(),
+		"addr":                s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
 			"addr":    leaderAddr,

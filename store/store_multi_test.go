@@ -16,6 +16,7 @@ import (
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
+// Test_MultiNode_Leader_Followers tests basic cluster joining.
 func Test_MultiNode_Leader_Followers(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
@@ -30,6 +31,10 @@ func Test_MultiNode_Leader_Followers(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
+	// Record the latest ConfigurationIndex for checking after the next node
+	// joins. It should increase by one.
+	cfgIndex := s0.ConfigurationIndex()
+
 	s1, ln1 := mustNewStore(t)
 	defer ln1.Close()
 	if err := s1.Open(); err != nil {
@@ -41,6 +46,11 @@ func Test_MultiNode_Leader_Followers(t *testing.T) {
 	}
 	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Was the ConfigurationIndex bumped due to change in cluster membership?
+	if prev, new := cfgIndex, s0.ConfigurationIndex(); new <= prev {
+		t.Fatalf("expected ConfigurationIndex to be greater than %d, got %d", prev, new)
 	}
 
 	// Give some time for cluster config to propagate.
@@ -60,6 +70,11 @@ func Test_MultiNode_Leader_Followers(t *testing.T) {
 	}
 	if node0.Suffrage != proto.Suffrage_VOTER {
 		t.Fatalf("incorrect suffrage for leader")
+	}
+
+	// Ensure the Configuration Index is the same on every node.
+	if s0.ConfigurationIndex() != s1.ConfigurationIndex() {
+		t.Fatalf("Configuration Indexes do not agree")
 	}
 
 	// Check the followers returned by each node, and compare.
