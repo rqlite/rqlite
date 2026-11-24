@@ -2770,61 +2770,68 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		stats.Add(numSnapshotsFull, 1)
 		s.numFullSnapshots++
 	} else {
-		if !fsutil.PathExistsWithData(s.walPath) {
+		sd := snapshot.NewStagingDir(s.walStagingDir)
+		stagedWALs, err := sd.WALFiles()
+		if err != nil {
+			return nil, err
+		}
+		hasLiveWAL := fsutil.PathExistsWithData(s.walPath)
+		if !hasLiveWAL && len(stagedWALs) == 0 {
 			// No WAL data available. This can happen when the Raft log contains only
 			// entries that don't modify the database (e.g. cluster membership changes).
 			// Return an error so Raft knows there is nothing to snapshot.
 			return nil, ErrNoWALToSnapshot
 		}
 
-		// Write the compacted WAL to the WAL staging directory. The Snapshotting process
-		// will atomically move this entire directory. If it fails to do so, then this WAL
-		// file will be packaged as part of the next Snapshot and the next WAL file. If the
-		// staging directory is moved, but the snapshotting later errors, then FullNeeded
-		// will be set because we've "lost" a WAL file. If the staging directory is moved,
-		// but the system then crashes, then the lack of the clean_snapshot flag will force
-		// a full restore from the Snapshot Store -- which will allow the next snapshot to
-		// be incremental.
-		if err := fsutil.EnsureDirExists(s.walStagingDir); err != nil {
-			return nil, err
-		}
-		sd := snapshot.NewStagingDir(s.walStagingDir)
-		walWriter, _, err := sd.CreateWAL()
-		if err != nil {
-			return nil, err
-		}
-		defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
-
-		if meta, _, err := s.checkpointer.Checkpoint(walWriter, truncateTimeout); err != nil {
-			var re sql.RetryableError
-			if errors.As(err, &re) && !re.Retryable() {
-				// A non-retryable error at this point means the underlying system is in a state
-				// that further incremental snapshots won't handle. We could revert to full but
-				// a non-retryable error shouldn't actually happen. Something bad has gone wrong.
-				walWriter.Cancel()
-				s.logger.Fatalf("failed to checkpoint and truncate database for incremental snapshot: %s (meta: %s)",
-					err.Error(), meta)
+		if hasLiveWAL {
+			// Write the compacted WAL to the WAL staging directory. The Snapshotting process
+			// will atomically move this entire directory. If it fails to do so, then this WAL
+			// file will be packaged as part of the next Snapshot and the next WAL file. If the
+			// staging directory is moved, but the snapshotting later errors, then FullNeeded
+			// will be set because we've "lost" a WAL file. If the staging directory is moved,
+			// but the system then crashes, then the lack of the clean_snapshot flag will force
+			// a full restore from the Snapshot Store -- which will allow the next snapshot to
+			// be incremental.
+			if err := fsutil.EnsureDirExists(s.walStagingDir); err != nil {
+				return nil, err
 			}
-			s.numIncSnapshotsRetryable.Add(1)
-			return nil, err
+			walWriter, _, err := sd.CreateWAL()
+			if err != nil {
+				return nil, err
+			}
+			defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
+
+			if meta, _, err := s.checkpointer.Checkpoint(walWriter, truncateTimeout); err != nil {
+				var re sql.RetryableError
+				if errors.As(err, &re) && !re.Retryable() {
+					// A non-retryable error at this point means the underlying system is in a state
+					// that further incremental snapshots won't handle. We could revert to full but
+					// a non-retryable error shouldn't actually happen. Something bad has gone wrong.
+					walWriter.Cancel()
+					s.logger.Fatalf("failed to checkpoint and truncate database for incremental snapshot: %s (meta: %s)",
+						err.Error(), meta)
+				}
+				s.numIncSnapshotsRetryable.Add(1)
+				return nil, err
+			}
+
+			// Now that the database has been truncated successfully, the WAL file in the Staging directory
+			// should be marked valid. If we crash here, on restart we delete the Staging directory, but since
+			// the Snapshot didn't get to complete, the database fingerprint will not be updated, so on
+			// restart the database will be replaced by that in the Snapshot. But by marking the WAL file
+			// as valid, if the snapshotting process errors later (Persist fails for example), we can
+			// continue to use the compacted WAL file in the Staging directory for the next snapshot attempt,
+			// which will be faster than performing a full snapshot. All this means that we avoid breaking the
+			// series of incremental snapshots. The next Snapshot will comprise one or more WAL files in that case.
+			if err := walWriter.Close(); err != nil {
+				// Failing to close the staged WAL would break the chain of incrementals. Fall back to full.
+				if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
+					s.logger.Fatalf("failed to set full needed after WAL writer close failure: %s", err)
+				}
+				return nil, err
+			}
 		}
 		s.numIncSnapshots.Add(1)
-
-		// Now that the database has been truncated successfully, the WAL file in the Staging directory
-		// should be marked valid. If we crash here, on restart we delete the Staging directory, but since
-		// the Snapshot didn't get to complete, the database fingerprint will not be updated, so on
-		// restart the database will be replaced by that in the Snapshot. But by marking the WAL file
-		// as valid, if the snapshotting process errors later (Persist fails for example), we can
-		// continue to use the compacted WAL file in the Staging directory for the next snapshot attempt,
-		// which will be faster than performing a full snapshot. All this means that we avoid breaking the
-		// series of incremental snapshots. The next Snapshot will comprise two WAL files in that case.
-		if err := walWriter.Close(); err != nil {
-			// Failing to close the staged WAL would break the chain of incrementals. Fall back to full.
-			if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
-				s.logger.Fatalf("failed to set full needed after WAL writer close failure: %s", err)
-			}
-			return nil, err
-		}
 
 		// When it comes to incremental snapshotting of WAL files, we pass the WAL directory path to the
 		// Snapshot Store indirectly via the header. The Snapshotting system knows to check for this. It
