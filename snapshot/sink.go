@@ -318,6 +318,10 @@ func (s *Sink) processHeader() error {
 
 	// Read length prefix encoded big endian
 	numHdrBytes := binary.BigEndian.Uint32(s.buf.Bytes()[:hdrPrefixSz])
+	if numHdrBytes > MaxHeaderSize {
+		// Reject it now, rather than buffering until that much data arrives.
+		return fmt.Errorf("%w: %d bytes", ErrHeaderTooLarge, numHdrBytes)
+	}
 	if s.buf.Len() < hdrPrefixSz+int(numHdrBytes) {
 		// Not enough data to read complete header.
 		return nil

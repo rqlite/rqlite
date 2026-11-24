@@ -65,7 +65,7 @@ The package is organized around four main operations: **creating** snapshots (si
 
 The `Sink` type implements `raft.SnapshotSink`. It is the entry point for Raft when persisting a new snapshot. The sink is **adaptive** — it handles both full and incremental snapshots, though each reaches it differently.
 
-When Raft calls `Write`, the sink first accumulates bytes until it can decode a protobuf `SnapshotHeader` (a 4-byte big-endian length prefix followed by the marshaled header). What happens next depends on how the snapshot is supplied:
+When Raft calls `Write`, the sink first accumulates bytes until it can decode a protobuf `SnapshotHeader` (a 4-byte big-endian length prefix followed by the marshaled header). A stream claiming a header larger than 1MiB is rejected as soon as the length prefix is read. What happens next depends on how the snapshot is supplied:
 
 - **FullSnapshot header (via `Write`)**: The sink delegates to `FullSink`, which streams the incoming bytes into `data.db` and any WAL files described by the header. On `Close`, it verifies each file's CRC32 against the header (catching network corruption) and writes `.crc32` sidecar files.
 

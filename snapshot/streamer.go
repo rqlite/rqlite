@@ -15,6 +15,11 @@ import (
 const (
 	// HeaderSizeLen is the length in bytes of the SnapshotHeader length prefix.
 	HeaderSizeLen = 4
+
+	// MaxHeaderSize is the largest marshaled SnapshotHeader, in bytes, which will
+	// be read from a snapshot stream. A header holds a few bytes for each file in
+	// the snapshot, so this is far larger than any real header.
+	MaxHeaderSize = 1024 * 1024
 )
 
 // NewHeaderFromFile creates a new Header for the given file path. If crc32 is true,

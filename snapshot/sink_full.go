@@ -29,6 +29,10 @@ var (
 	// ErrHeaderInvalid indicates the header is invalid.
 	ErrHeaderInvalid = errors.New("snapshot install header invalid")
 
+	// ErrHeaderTooLarge is returned when the header of a snapshot stream claims
+	// to be larger than MaxHeaderSize.
+	ErrHeaderTooLarge = errors.New("snapshot header too large")
+
 	// ErrInvalidSQLiteFile indicates the installed DB file is not a valid SQLite file.
 	ErrInvalidSQLiteFile = errors.New("installed DB file is not a valid SQLite file")
 

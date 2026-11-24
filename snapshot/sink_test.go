@@ -3,6 +3,7 @@ package snapshot
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -331,6 +332,26 @@ func Test_Sink_WriteCannotNameDirectory(t *testing.T) {
 	}
 	if fsutil.DirExists(filepath.Join(snapDir, meta.ID)) {
 		t.Fatalf("expected no snapshot to be installed")
+	}
+}
+
+// Test_Sink_HeaderTooLarge tests that a snapshot stream claiming an oversized
+// header is rejected as soon as the claim is read.
+func Test_Sink_HeaderTooLarge(t *testing.T) {
+	lenBuf := make([]byte, HeaderSizeLen)
+	binary.BigEndian.PutUint32(lenBuf, MaxHeaderSize+1)
+
+	sink := NewSink(t.TempDir(), makeRaftMeta("test-header-too-large", 100, 1, 1), nil, nil)
+	if err := sink.Open(); err != nil {
+		t.Fatalf("unexpected error opening sink: %s", err.Error())
+	}
+	defer sink.Cancel()
+	if _, err := sink.Write(lenBuf); !errors.Is(err, ErrHeaderTooLarge) {
+		t.Fatalf("expected ErrHeaderTooLarge, got %v", err)
+	}
+
+	if _, err := Restore(bytes.NewReader(lenBuf), filepath.Join(t.TempDir(), "db")); !errors.Is(err, ErrHeaderTooLarge) {
+		t.Fatalf("expected ErrHeaderTooLarge from Restore, got %v", err)
 	}
 }
 
