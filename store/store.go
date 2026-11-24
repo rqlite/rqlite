@@ -2702,6 +2702,19 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 	}()
 
+	// A database file modified outside the control of the Store can only be
+	// captured by a full snapshot, so tell the Snapshot Store one is needed.
+	// Modifying the database outside of rqlite's control is not officially
+	// supported, but the system attempts to handle that case anyway. It remembers
+	// this until a snapshot is actually stored. This must happen here because the
+	// modification can only be detected once: this function records the file's
+	// latest modified time on the way out, whether it succeeds or not.
+	if s.dbModified() {
+		if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
+			return nil, err
+		}
+	}
+
 	startT := time.Now()
 	defer func() {
 		if retErr != nil && retErr != ErrNoWALToSnapshot {
@@ -2735,7 +2748,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 	}
 
-	dueNext, err := s.snapshotDueNext()
+	dueNext, err := s.snapshotStore.DueNext()
 	if err != nil {
 		return nil, err
 	}
@@ -3339,17 +3352,6 @@ func (s *Store) doAutoOptimize() error {
 	stats.Add(numAutoOptimizes, 1)
 	s.numAutoOptimizes++
 	return s.setKeyTime(lastOptimizeTimeKey, time.Now())
-}
-
-func (s *Store) snapshotDueNext() (snapshot.Type, error) {
-	dueNext, err := s.snapshotStore.DueNext()
-	if err != nil {
-		return snapshot.Full, err
-	}
-	if dueNext == snapshot.Full || s.dbModified() {
-		return snapshot.Full, nil
-	}
-	return snapshot.Incremental, nil
 }
 
 // resolveAutoLevel maps AUTO read consistency level to the right level. If the level is not
