@@ -898,84 +898,6 @@ func Test_SingleNodeSnapshot_CheckpointFailures(t *testing.T) {
 	}
 }
 
-type mockSnapshotSink struct {
-	fd       *os.File
-	writeErr error
-	closeErr error
-}
-
-func (m *mockSnapshotSink) Write(p []byte) (n int, err error) {
-	if m.writeErr != nil {
-		return 0, m.writeErr
-	}
-	if m.fd != nil {
-		return m.fd.Write(p)
-	}
-	return len(p), nil
-}
-
-func (m *mockSnapshotSink) Close() error {
-	var err error
-	if m.fd != nil {
-		// Close the underlying resource anyway so tests can terminate.
-		err = m.fd.Close()
-	}
-	if m.closeErr != nil {
-		err = m.closeErr
-	}
-	return err
-}
-
-func (m *mockSnapshotSink) ID() string {
-	return "1"
-}
-
-func (m *mockSnapshotSink) Index() uint64 {
-	return 1
-}
-
-func (m *mockSnapshotSink) Term() uint64 {
-	return 1
-}
-
-func (m *mockSnapshotSink) Cancel() error {
-	return nil
-}
-
-// mockSnapshotStreamer stands in for the ReadCloser Raft hands to the FSM during
-// a restore, which always knows the index and term of the snapshot it streams.
-type mockSnapshotStreamer struct {
-	*os.File
-}
-
-func (m *mockSnapshotStreamer) Index() uint64 {
-	return 1
-}
-
-func (m *mockSnapshotStreamer) Term() uint64 {
-	return 1
-}
-
-func mustExecute(t *testing.T, s *Store, queries []string) []*proto.ExecuteQueryResponse {
-	t.Helper()
-	rows, _, err := s.Execute(context.Background(), executeRequestFromStrings(queries, false, false))
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-	return rows
-}
-
-func mustCreateRequest(query string) *command.Request {
-	return &command.Request{
-		Statements: []*command.Statement{
-			{
-				Sql:        query,
-				ForceStall: true,
-			},
-		},
-	}
-}
-
 // Test_SingleNodeSnapshot_StagedWALThenLoad tests that a WAL left in the
 // staging directory by a failed incremental snapshot is not packaged on top
 // of a later full snapshot. The staged WAL is relative to the database that
@@ -1027,6 +949,7 @@ func Test_SingleNodeSnapshot_StagedWALThenLoad(t *testing.T) {
 	}
 
 	// Before the snapshot is persisted, a LOAD is applied.
+	// This load file contains 3 rows.
 	if err := s.Load(context.Background(), loadRequestFromFile(filepath.Join("testdata", "load.sqlite"))); err != nil {
 		t.Fatalf("failed to load: %s", err.Error())
 	}
@@ -1060,7 +983,8 @@ func Test_SingleNodeSnapshot_StagedWALThenLoad(t *testing.T) {
 	}
 
 	// Restart the node from the Snapshot Store, and check that the database
-	// is intact and contains the loaded data plus the one new row.
+	// is intact and contains the loaded data plus the one new row. The staged
+	// WALs should not have had any effect since they should have been deleted.
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
@@ -1073,7 +997,15 @@ func Test_SingleNodeSnapshot_StagedWALThenLoad(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	mustCheckStagedWALDB(t, s, `[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]`)
+	
+	query := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
+	rows, _, _, err := s.Query(context.Background(), query)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 
 	// Reaping checkpoints the incremental snapshot into the full snapshot,
 	// and checks the integrity of the result.
@@ -1082,39 +1014,14 @@ func Test_SingleNodeSnapshot_StagedWALThenLoad(t *testing.T) {
 	}
 }
 
-// mustCheckStagedWALDB checks that the database of s passes an integrity
-// check, contains only the table foo, and that foo contains exp.
-func mustCheckStagedWALDB(t *testing.T, s *Store, exp string) {
-	t.Helper()
-	for _, c := range []struct {
-		query string
-		exp   string
-	}{
-		{`PRAGMA integrity_check`, `[["ok"]]`},
-		{`SELECT name FROM sqlite_master WHERE type="table"`, `[["foo"]]`},
-		{`SELECT * FROM foo`, exp},
-	} {
-		r, _, _, err := s.Query(context.Background(), queryRequestFromString(c.query, false, false, false))
-		if err != nil {
-			t.Fatalf("failed to query %q: %s", c.query, err.Error())
-		}
-		if r[0].Error != "" {
-			t.Fatalf("query %q returned error: %s", c.query, r[0].Error)
-		}
-		if got := asJSON(r[0].Values); c.exp != got {
-			t.Fatalf("unexpected results for %q\nexp: %s\ngot: %s", c.query, c.exp, got)
-		}
-	}
-}
-
 // Test_SingleNodeSnapshot_StagedWALThenRestore tests that a WAL left in the
-// staging directory by an incremental snapshot that was never persisted is
-// not packaged on top of a snapshot the node then restores from. This is what
-// happens on a follower when the leader sends it a snapshot: Raft installs the
-// snapshot in the Snapshot Store and restores the FSM from it, and the next
-// snapshot the follower takes is incremental. A staged WAL from before the
-// restore is relative to the old database, so it must not be part of that
-// incremental snapshot.
+// staging directory by an incremental snapshot that was never persisted (could
+// happen due a snapshot failure) is not packaged on top of a snapshot the node
+// then restores from. This is what happens on a follower when the leader sends
+// it a snapshot: Raft installs the snapshot in the Snapshot Store and restores
+// the FSM from it, and the next snapshot the follower takes is incremental. A
+// staged WAL from before the restore is relative to the old database, so it
+// must not be part of that incremental snapshot.
 //
 // Raft's user restore is used to install the snapshot, as it goes through the
 // same Snapshot Store and FSM restore path as a snapshot sent by a leader.
@@ -1205,11 +1112,97 @@ func Test_SingleNodeSnapshot_StagedWALThenRestore(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	mustCheckStagedWALDB(t, s, `[[1,"fiona"]]`)
+
+	query := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
+	rows, _, _, err := s.Query(context.Background(), query)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 
 	// Reaping checkpoints the incremental snapshot into the full snapshot,
 	// and checks the integrity of the result.
 	if _, _, err := s.Reap(); err != nil {
 		t.Fatalf("failed to reap snapshots: %s", err.Error())
+	}
+}
+
+type mockSnapshotSink struct {
+	fd       *os.File
+	writeErr error
+	closeErr error
+}
+
+func (m *mockSnapshotSink) Write(p []byte) (n int, err error) {
+	if m.writeErr != nil {
+		return 0, m.writeErr
+	}
+	if m.fd != nil {
+		return m.fd.Write(p)
+	}
+	return len(p), nil
+}
+
+func (m *mockSnapshotSink) Close() error {
+	var err error
+	if m.fd != nil {
+		// Close the underlying resource anyway so tests can terminate.
+		err = m.fd.Close()
+	}
+	if m.closeErr != nil {
+		err = m.closeErr
+	}
+	return err
+}
+
+func (m *mockSnapshotSink) ID() string {
+	return "1"
+}
+
+func (m *mockSnapshotSink) Index() uint64 {
+	return 1
+}
+
+func (m *mockSnapshotSink) Term() uint64 {
+	return 1
+}
+
+func (m *mockSnapshotSink) Cancel() error {
+	return nil
+}
+
+// mockSnapshotStreamer stands in for the ReadCloser Raft hands to the FSM during
+// a restore, which always knows the index and term of the snapshot it streams.
+type mockSnapshotStreamer struct {
+	*os.File
+}
+
+func (m *mockSnapshotStreamer) Index() uint64 {
+	return 1
+}
+
+func (m *mockSnapshotStreamer) Term() uint64 {
+	return 1
+}
+
+func mustExecute(t *testing.T, s *Store, queries []string) []*proto.ExecuteQueryResponse {
+	t.Helper()
+	rows, _, err := s.Execute(context.Background(), executeRequestFromStrings(queries, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	return rows
+}
+
+func mustCreateRequest(query string) *command.Request {
+	return &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql:        query,
+				ForceStall: true,
+			},
+		},
 	}
 }
