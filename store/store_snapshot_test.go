@@ -997,7 +997,7 @@ func Test_SingleNodeSnapshot_StagedWALThenLoad(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	
+
 	query := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
 	rows, _, _, err := s.Query(context.Background(), query)
 	if err != nil {
