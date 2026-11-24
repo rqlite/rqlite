@@ -1,9 +1,11 @@
 ## v10.7.5 (November 23rd 2026)
+This release addresses a [moderate severity security issue](https://github.com/rqlite/rqlite/security/advisories/GHSA-rp9c-44g4-v8m3). If you use [authentication](https://rqlite.io/docs/guides/security/) and [read-replica nodes](https://rqlite.io/docs/clustering/read-replicas/) you should upgrade.
+
 ### Implementation changes and bug fixes
 - [PR #3069](https://github.com/rqlite/rqlite/pull/3069): Persist detection of modified database via _FULL snapshot needed_ file, which persists until FULL snapshot completes.
 - [PR #3068](https://github.com/rqlite/rqlite/pull/3068): A recovering node never restores from snapshotted state.
 - [PR #3067](https://github.com/rqlite/rqlite/pull/3067): Discard any staged WAL files when the database is fully replaced by a load, boot, or restore. Thanks @clarkmcc
-- [PR #3072](https://github.com/rqlite/rqlite/pull/3072): Join may only replace a node of the same suffrage.
+- [PR #3072](https://github.com/rqlite/rqlite/pull/3072): Join may only replace a node of the same suffrage. Thanks @zachariah-mithani
 - [PR #3075](https://github.com/rqlite/rqlite/pull/3075): Join may replace at most one existing node.
 
 ## v10.7.4 (November 19th 2026)
