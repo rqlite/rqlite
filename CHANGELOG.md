@@ -1,5 +1,4 @@
 ## v10.7.5 (unreleased)
-
 ### Implementation changes and bug fixes
 - [PR #3072](https://github.com/rqlite/rqlite/pull/3072): Join may only replace a node of the same suffrage.
 
