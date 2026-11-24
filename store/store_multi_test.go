@@ -5,6 +5,7 @@ import (
 	"errors"
 	"expvar"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -1261,6 +1262,50 @@ func Test_MultiNodeJoinNonVoter_ChangedIDAddrSame(t *testing.T) {
 		if node.ID == newID && (node.Addr != s1.Addr() || node.Suffrage != proto.Suffrage_NON_VOTER) {
 			t.Fatalf("non-voter has incorrect address or suffrage post rejoin")
 		}
+	}
+
+	// Add a second non-voter, so that a single join can match two nodes of
+	// its own type.
+	otherID, otherAddr := "other", "127.0.0.1:2"
+	if err := s0.Join(joinRequest(otherID, otherAddr, false)); err != nil {
+		t.Fatalf("failed to join second non-voter: %s", err.Error())
+	}
+	nodes, err = s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes post second non-voter join: %s", err.Error())
+	}
+	if len(nodes) != 3 {
+		t.Fatalf("size of cluster is not correct post second non-voter join")
+	}
+
+	// A join must not replace a node of a different type, whether the match
+	// is by ID or by address, nor replace more than one node, and must leave
+	// the cluster unchanged.
+	for _, tt := range []struct {
+		name  string
+		id    string
+		addr  string
+		voter bool
+		err   error
+	}{
+		{"non-voter with voter's ID", s0.ID(), "127.0.0.1:1", false, ErrJoinSuffrageMismatch},
+		{"non-voter with voter's address", "fresh", s0.Addr(), false, ErrJoinSuffrageMismatch},
+		{"non-voter with voter's ID and non-voter's address", s0.ID(), s1.Addr(), false, ErrJoinSuffrageMismatch},
+		{"voter with non-voter's ID", newID, "127.0.0.1:1", true, ErrJoinSuffrageMismatch},
+		{"voter with non-voter's address", "fresh", s1.Addr(), true, ErrJoinSuffrageMismatch},
+		{"non-voter with one non-voter's ID and another's address", newID, otherAddr, false, ErrJoinReplacesMultiple},
+		{"non-voter with one non-voter's address and another's ID", otherID, s1.Addr(), false, ErrJoinReplacesMultiple},
+	} {
+		if err := s0.Join(joinRequest(tt.id, tt.addr, tt.voter)); !errors.Is(err, tt.err) {
+			t.Fatalf("%s: expected %v, got %v", tt.name, tt.err, err)
+		}
+	}
+	nodesPost, err := s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes post rejected joins: %s", err.Error())
+	}
+	if !reflect.DeepEqual(nodes, nodesPost) {
+		t.Fatalf("cluster changed by rejected joins\nexp: %v\ngot: %v", nodes, nodesPost)
 	}
 }
 
