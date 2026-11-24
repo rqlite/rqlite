@@ -11,4 +11,4 @@ rqlite optimizes for low-friction local development out of the box and supports 
 
 While bug and crash reports are always welcome, reports demonstrating the following **may** be closed as _Working as Intended_:
 - Unauthorized data access, modification, or Denial-of-Service against nodes running with authentication disabled or with improper filesystem access controls.
-- Attacks against the Raft consensus port when exposed to untrusted networks without network-level isolation and mutual TLS.
+- Attacks against the Raft consensus network port when exposed to untrusted networks without network-level isolation and mutual TLS.
