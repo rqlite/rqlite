@@ -1,7 +1,7 @@
 # Security
 
 ## Hardening your rqlite deployment
-To maximize the security of your cluster you should work through the [rqlite _Security guide_](https://rqlite.io/docs/guides/security/). This guide tells you how to harden an rqlite deployment. Work through the sections on that page and apply each one that is relevant to your environment.
+To maximize the security of your cluster you should work through the [rqlite _Security guide_](https://rqlite.io/docs/guides/security/). That guide tells you how to harden an rqlite deployment. Work through the sections on that page and apply each one that is relevant to your environment.
 
 ## Reporting Vulnerabilities
 You can report Vulnerabilities via the GitHub [Security page](https://github.com/rqlite/rqlite/security). 
