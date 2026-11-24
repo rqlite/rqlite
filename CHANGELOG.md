@@ -3,7 +3,7 @@ This release addresses a [moderate severity security issue](https://github.com/r
 
 ### Implementation changes and bug fixes
 - [PR #3069](https://github.com/rqlite/rqlite/pull/3069): Persist detection of modified database via _FULL snapshot needed_ file, which persists until FULL snapshot completes.
-- [PR #3068](https://github.com/rqlite/rqlite/pull/3068): A recovering node never restores from snapshotted state.
+- [PR #3068](https://github.com/rqlite/rqlite/pull/3068): A recovering node will never restore from snapshotted state so skip checksum checks.
 - [PR #3067](https://github.com/rqlite/rqlite/pull/3067): Discard any staged WAL files when the database is fully replaced by a load, boot, or restore. Thanks @clarkmcc
 - [PR #3072](https://github.com/rqlite/rqlite/pull/3072): Join may only replace a node of the same suffrage. Thanks @zachariah-mithani
 - [PR #3075](https://github.com/rqlite/rqlite/pull/3075): Join may replace at most one existing node.
