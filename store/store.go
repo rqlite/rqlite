@@ -59,6 +59,10 @@ var (
 	// a voter.
 	ErrJoinSuffrageMismatch = errors.New("join would replace node of different suffrage")
 
+	// ErrJoinReplacesMultiple is returned when a join request would replace
+	// more than one existing node.
+	ErrJoinReplacesMultiple = errors.New("join would replace more than one node")
+
 	// ErrLeaderNotFound is returned when a node cannot locate a leader.
 	ErrLeaderNotFound = errors.New("leader not found")
 
@@ -2163,6 +2167,10 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 // replace a node of its own type: a voter replaces a voter, and a non-voter
 // replaces a non-voter. Otherwise ErrJoinSuffrageMismatch is returned and
 // the cluster is left unchanged.
+//
+// A joining node replaces at most one node. If its ID matches one node and
+// its address matches another, ErrJoinReplacesMultiple is returned and the
+// cluster is left unchanged.
 func (s *Store) Join(jr *proto.JoinRequest) error {
 	if !s.open.Is() {
 		return ErrNotOpen
@@ -2192,8 +2200,8 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 
 	// A node already in the configuration with either the joining node's ID
 	// or address, but not both, is displaced by the joining node. A join may
-	// only displace a node of its own type, so check every such node before
-	// removing any of them.
+	// only displace a node of its own type, and at most one node, so check
+	// every such node before removing any.
 	var displaced []raft.ServerID
 	for _, srv := range configFuture.Configuration().Servers {
 		sameID := srv.ID == raft.ServerID(id)
@@ -2219,8 +2227,15 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 		}
 		displaced = append(displaced, srv.ID)
 	}
+	if len(displaced) > 1 {
+		stats.Add(numRejectedJoins, 1)
+		s.logger.Printf("rejecting join request from node %s at %s, it would replace nodes %v",
+			id, addr, displaced)
+		return ErrJoinReplacesMultiple
+	}
 
-	for _, srvID := range displaced {
+	if len(displaced) == 1 {
+		srvID := displaced[0]
 		if err := s.remove(string(srvID)); err != nil {
 			s.logger.Printf("failed to remove node %s: %v", srvID, err)
 			return err
