@@ -1,4 +1,4 @@
-## v10.7.5 (unreleased)
+## v10.7.5 (November 23rd 2026)
 ### Implementation changes and bug fixes
 - [PR #3068](https://github.com/rqlite/rqlite/pull/3068): A recovering node never restores from snapshotted state.
 - [PR #3067](https://github.com/rqlite/rqlite/pull/3067): Discard any staged WAL files when the database is fully replaced by a load, boot, or restore. Thanks @clarkmcc
