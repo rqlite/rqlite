@@ -624,6 +624,9 @@ func (s *Store) Open() (retErr error) {
 	}
 	s.logger.Printf("%d preexisting snapshots present", len(snaps))
 
+	// Are we about to recover a node from a static config?
+	recoveringNode := fsutil.PathExists(s.peersPath)
+
 	// Now, check if the most recent snapshot operation ran to completion
 	// without error and also check if the underlying DB file is unchanged since
 	// that snapshot. It shouldn't be changed -- that would require manual
@@ -632,6 +635,7 @@ func (s *Store) Open() (retErr error) {
 	// scenarios. Anyway if it all looks good we can skip restoring the SQLite
 	// database from the Raft snapshot store because the contents are logically
 	// the same.
+
 	removeDBFiles := true
 	if err := func() error {
 		if snapshotStore.Len() == 0 {
@@ -648,6 +652,10 @@ func (s *Store) Open() (retErr error) {
 			}
 		}()
 
+		if recoveringNode {
+			s.logger.Printf("node recovery requested so full restore needed, ignoring snapshots")
+			return nil
+		}
 		if !fsutil.PathExists(s.cleanSnapshotPath) {
 			return nil
 		}
@@ -774,7 +782,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Request to recover node?
-	if fsutil.PathExists(s.peersPath) {
+	if recoveringNode {
 		s.logger.Printf("attempting node recovery using %s", s.peersPath)
 		config, err := raft.ReadConfigJSON(s.peersPath)
 		if err != nil {
@@ -792,8 +800,6 @@ func (s *Store) Open() (retErr error) {
 		if err := fsutil.Rename(s.peersPath, s.peersInfoPath); err != nil {
 			return fmt.Errorf("failed to move %s after recovery: %s", s.peersPath, err.Error())
 		}
-		// Recovering a node creates a new snapshot. We need to use it on startup.
-		raftConfig.NoSnapshotRestoreOnStart = false
 		s.logger.Printf("node recovered successfully using %s", s.peersPath)
 		stats.Add(numRecoveries, 1)
 	}

@@ -1,5 +1,6 @@
 ## v10.7.5 (unreleased)
 ### Implementation changes and bug fixes
+- [PR #3068](https://github.com/rqlite/rqlite/pull/3068): Check for a node recovery request before deciding whether the node can skip restoring from a snapshot at startup.
 - [PR #3067](https://github.com/rqlite/rqlite/pull/3067): Discard any staged WAL files when the database is fully replaced by a load, boot, or restore. Thanks @clarkmcc
 - [PR #3072](https://github.com/rqlite/rqlite/pull/3072): Join may only replace a node of the same suffrage.
 - [PR #3075](https://github.com/rqlite/rqlite/pull/3075): Join may replace at most one existing node.
