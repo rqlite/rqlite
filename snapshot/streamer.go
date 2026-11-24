@@ -125,23 +125,6 @@ func NewSnapshotHeader(dbPath string, walPaths ...string) (*proto.SnapshotHeader
 	return sh, nil
 }
 
-// NewIncrementalFileSnapshotHeader creates a new SnapshotHeader for a local
-// directory containing WAL files that should be moved (not streamed) into
-// the snapshot directory. No data follows this header when written to a Sink.
-func NewIncrementalFileSnapshotHeader(walDirPath string) (*proto.SnapshotHeader, error) {
-	if walDirPath == "" {
-		return nil, fmt.Errorf("walDirPath must be non-empty")
-	}
-	return &proto.SnapshotHeader{
-		FormatVersion: 1,
-		Payload: &proto.SnapshotHeader_IncrementalFile{
-			IncrementalFile: &proto.IncrementalFileSnapshot{
-				WalDirPath: walDirPath,
-			},
-		},
-	}, nil
-}
-
 // marshalSnapshotHeader marshals the SnapshotHeader to a byte slice.
 func marshalSnapshotHeader(s *proto.SnapshotHeader) ([]byte, error) {
 	return pb.Marshal(s)
@@ -166,16 +149,13 @@ func snapshotHeaderPayloadSize(s *proto.SnapshotHeader) (int64, error) {
 	}
 	total := int64(len(data))
 
-	switch p := s.Payload.(type) {
-	case *proto.SnapshotHeader_Full:
+	if p, ok := s.Payload.(*proto.SnapshotHeader_Full); ok {
 		if p.Full.DbHeader != nil {
 			total += int64(p.Full.DbHeader.SizeBytes)
 		}
 		for _, w := range p.Full.WalHeaders {
 			total += int64(w.SizeBytes)
 		}
-	case *proto.SnapshotHeader_IncrementalFile:
-		// No file data follows this header type.
 	}
 	return total, nil
 }
@@ -322,58 +302,4 @@ func (s *SnapshotStreamer) Len() (int64, error) {
 		return 0, err
 	}
 	return HeaderSizeLen + sz, nil
-}
-
-// SnapshotPathStreamer implements io.ReadCloser for streaming a snapshot's
-// data, where the snapshot data is a directory containing WAL files. It creates
-// the SnapshotHeader on the fly based on the provided directory path, and then
-// streams the header to readers. The path is set in the header, and no more
-// data follows the header. Instead the client is expected to read the header,
-// determine the directory path, and then move the directory directly.
-type SnapshotPathStreamer struct {
-	walDirPath string
-	hdr        *proto.SnapshotHeader
-	multiR     io.Reader
-}
-
-// NewSnapshotPathStreamer creates a new SnapshotPathStreamer for the given WAL directory path.
-func NewSnapshotPathStreamer(walDirPath string) (*SnapshotPathStreamer, error) {
-	sh, err := NewIncrementalFileSnapshotHeader(walDirPath)
-	if err != nil {
-		return nil, err
-	}
-
-	hdrBuf, err := marshalSnapshotHeader(sh)
-	if err != nil {
-		return nil, err
-	}
-	hdrBufR := bytes.NewReader(hdrBuf)
-	var hdrLenBEBuf [HeaderSizeLen]byte
-	binary.BigEndian.PutUint32(hdrLenBEBuf[:], uint32(len(hdrBuf)))
-	hdrLenBufR := bytes.NewReader(hdrLenBEBuf[:])
-
-	var readers []io.Reader
-	readers = append(readers, hdrLenBufR)
-	readers = append(readers, hdrBufR)
-	multiR := io.MultiReader(readers...)
-
-	return &SnapshotPathStreamer{
-		walDirPath: walDirPath,
-		hdr:        sh,
-		multiR:     multiR,
-	}, nil
-}
-
-// Read reads from the SnapshotPathStreamer. The data returned by Read() is
-// the 4-byte integer, big-endian, indicating the size of the marshaled header,
-// followed by the marshaled header itself. No more data follows the header,
-// and once the header has been fully read, Read() returns io.EOF.
-func (s *SnapshotPathStreamer) Read(p []byte) (n int, err error) {
-	return s.multiR.Read(p)
-}
-
-// Close closes the SnapshotPathStreamer. Since no files are opened by this struct,
-// Close() is a no-op.
-func (s *SnapshotPathStreamer) Close() error {
-	return nil
 }

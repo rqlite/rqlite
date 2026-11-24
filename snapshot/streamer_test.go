@@ -326,52 +326,6 @@ func Test_NewChecksummedSnapshotStreamer_EndToEnd(t *testing.T) {
 	}
 }
 
-func Test_SnapshotPathStreamer(t *testing.T) {
-	walDir := t.TempDir()
-	streamer, err := NewSnapshotPathStreamer(walDir)
-	if err != nil {
-		t.Fatalf("NewSnapshotPathStreamer failed: %v", err)
-	}
-
-	// Read and decode header size.
-	sizeBuf := make([]byte, HeaderSizeLen)
-	_, err = io.ReadFull(streamer, sizeBuf)
-	if err != nil {
-		t.Fatalf("Failed to read header size: %v", err)
-	}
-
-	hdrLen := int(binary.BigEndian.Uint32(sizeBuf))
-	hdrBuf := make([]byte, hdrLen)
-	_, err = io.ReadFull(streamer, hdrBuf)
-	if err != nil {
-		t.Fatalf("Failed to read header: %v", err)
-	}
-
-	pb, err := UnmarshalSnapshotHeader(hdrBuf)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal header from SnapshotPathStreamer: %v", err)
-	}
-
-	inc := pb.GetIncrementalFile()
-	if inc == nil {
-		t.Fatalf("Expected IncrementalFile payload, got nil")
-	}
-
-	if inc.WalDirPath != walDir {
-		t.Fatalf("Expected WalDirPath %q, got %q", walDir, inc.WalDirPath)
-	}
-
-	// Check that there is no more data to read after the header.
-	var eofBuf [1]byte
-	if _, err := streamer.Read(eofBuf[:]); err != io.EOF {
-		t.Fatalf("Expected EOF after reading header, got: %v", err)
-	}
-
-	if err := streamer.Close(); err != nil {
-		t.Fatalf("Failed to close SnapshotPathStreamer: %v", err)
-	}
-}
-
 func Test_NewHeaderFromChecksummedFile_DisabledRecomputes(t *testing.T) {
 	dir := t.TempDir()
 	dataPath := filepath.Join(dir, "data.db")

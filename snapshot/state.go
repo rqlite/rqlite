@@ -132,6 +132,45 @@ func (s *StateReader) Release() {
 	s.rc.Close()
 }
 
+// WALDirIngester is implemented by a snapshot sink which can build an incremental
+// snapshot from a directory of WAL files on the local filesystem. Sink implements it.
+type WALDirIngester interface {
+	IngestWALDir(sd *StagingDir) error
+}
+
+// WALDirState represents the changes to the database state since the last
+// snapshot, in the form of a staging directory of WAL files.
+type WALDirState struct {
+	sd *StagingDir
+}
+
+// NewWALDirState creates a new WALDirState.
+func NewWALDirState(sd *StagingDir) *WALDirState {
+	return &WALDirState{sd: sd}
+}
+
+// Persist hands the staging directory to the given sink. Nothing is written to
+// the sink: the WAL files are already on local disk, so the sink moves them into
+// place when it is closed. Every sink Raft passes here comes from Store.Create in
+// this package, so a sink which cannot take the directory is a programming error
+// and is reported as such.
+func (w *WALDirState) Persist(sink raft.SnapshotSink) error {
+	startT := time.Now()
+	ing, ok := sink.(WALDirIngester)
+	if !ok {
+		return fmt.Errorf("snapshot sink of type %T cannot ingest a WAL directory", sink)
+	}
+	if err := ing.IngestWALDir(w.sd); err != nil {
+		return err
+	}
+	stats.Get(persistSize).(*expvar.Int).Set(0)
+	recordDuration(persistDuration, startT)
+	return nil
+}
+
+// Release releases the WALDirState.
+func (w *WALDirState) Release() {}
+
 // IndexTermer is implemented by a snapshot sink which knows the Raft index and
 // term of the snapshot it is capturing. Sink implements it.
 type IndexTermer interface {

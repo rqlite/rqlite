@@ -147,22 +147,6 @@ func Test_IncrementalFileSink(t *testing.T) {
 	mustCopyFile(t, srcPath, filepath.Join(walDir, walName))
 	mustWriteCRC32File(t, filepath.Join(walDir, walName))
 
-	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
-	if err != nil {
-		t.Fatalf("unexpected error creating header: %s", err.Error())
-	}
-	hdrBytes, err := marshalSnapshotHeader(hdr)
-	if err != nil {
-		t.Fatalf("unexpected error marshaling header: %s", err.Error())
-	}
-
-	// Build the framed message: 4-byte length prefix + header bytes.
-	var frameBuf bytes.Buffer
-	lenBuf := make([]byte, HeaderSizeLen)
-	binary.BigEndian.PutUint32(lenBuf, uint32(len(hdrBytes)))
-	frameBuf.Write(lenBuf)
-	frameBuf.Write(hdrBytes)
-
 	snapDir := t.TempDir()
 	meta := makeRaftMeta("test-incremental-file", 100, 1, 1)
 	sink := NewSink(snapDir, meta, nil, nil)
@@ -170,14 +154,17 @@ func Test_IncrementalFileSink(t *testing.T) {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
 
-	// Write the framed header to the sink.
-	if _, err := sink.Write(frameBuf.Bytes()); err != nil {
-		t.Fatalf("unexpected error writing header to sink: %s", err.Error())
+	if err := sink.IngestWALDir(NewStagingDir(walDir)); err != nil {
+		t.Fatalf("unexpected error ingesting WAL directory: %s", err.Error())
 	}
 
-	// Additional writes should fail since no data follows an IncrementalFileSnapshot.
+	// Writes should fail since no data is written to an incremental snapshot,
+	// as should ingesting a second time.
 	if _, err := sink.Write([]byte("extra data")); err == nil {
-		t.Fatalf("expected error writing extra data after incremental file header, got nil")
+		t.Fatalf("expected error writing data to incremental snapshot, got nil")
+	}
+	if err := sink.IngestWALDir(NewStagingDir(walDir)); err == nil {
+		t.Fatalf("expected error ingesting WAL directory twice, got nil")
 	}
 
 	if err := sink.Close(); err != nil {
@@ -205,21 +192,6 @@ func Test_IncrementalFileSink_TwoFiles(t *testing.T) {
 		mustWriteCRC32File(t, filepath.Join(walDir, walNames[i]))
 	}
 
-	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
-	if err != nil {
-		t.Fatalf("unexpected error creating header: %s", err.Error())
-	}
-	hdrBytes, err := marshalSnapshotHeader(hdr)
-	if err != nil {
-		t.Fatalf("unexpected error marshaling header: %s", err.Error())
-	}
-
-	var frameBuf bytes.Buffer
-	lenBuf := make([]byte, HeaderSizeLen)
-	binary.BigEndian.PutUint32(lenBuf, uint32(len(hdrBytes)))
-	frameBuf.Write(lenBuf)
-	frameBuf.Write(hdrBytes)
-
 	snapDir := t.TempDir()
 	meta := makeRaftMeta("test-incremental-file-2", 100, 1, 1)
 	sink := NewSink(snapDir, meta, nil, nil)
@@ -227,8 +199,8 @@ func Test_IncrementalFileSink_TwoFiles(t *testing.T) {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
 
-	if _, err := sink.Write(frameBuf.Bytes()); err != nil {
-		t.Fatalf("unexpected error writing header to sink: %s", err.Error())
+	if err := sink.IngestWALDir(NewStagingDir(walDir)); err != nil {
+		t.Fatalf("unexpected error ingesting WAL directory: %s", err.Error())
 	}
 
 	if err := sink.Close(); err != nil {
@@ -258,21 +230,6 @@ func Test_IncrementalFileSink_ThreeFiles(t *testing.T) {
 		mustWriteCRC32File(t, filepath.Join(walDir, walNames[i]))
 	}
 
-	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
-	if err != nil {
-		t.Fatalf("unexpected error creating header: %s", err.Error())
-	}
-	hdrBytes, err := marshalSnapshotHeader(hdr)
-	if err != nil {
-		t.Fatalf("unexpected error marshaling header: %s", err.Error())
-	}
-
-	var frameBuf bytes.Buffer
-	lenBuf := make([]byte, HeaderSizeLen)
-	binary.BigEndian.PutUint32(lenBuf, uint32(len(hdrBytes)))
-	frameBuf.Write(lenBuf)
-	frameBuf.Write(hdrBytes)
-
 	snapDir := t.TempDir()
 	meta := makeRaftMeta("test-incremental-file-3", 100, 1, 1)
 	sink := NewSink(snapDir, meta, nil, nil)
@@ -280,8 +237,8 @@ func Test_IncrementalFileSink_ThreeFiles(t *testing.T) {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
 
-	if _, err := sink.Write(frameBuf.Bytes()); err != nil {
-		t.Fatalf("unexpected error writing header to sink: %s", err.Error())
+	if err := sink.IngestWALDir(NewStagingDir(walDir)); err != nil {
+		t.Fatalf("unexpected error ingesting WAL directory: %s", err.Error())
 	}
 
 	if err := sink.Close(); err != nil {
@@ -308,13 +265,41 @@ func Test_IncrementalFileSink_MissingCRC(t *testing.T) {
 	}
 	mustCopyFile(t, srcPath, filepath.Join(walDir, walName))
 
-	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
-	if err != nil {
-		t.Fatalf("unexpected error creating header: %s", err.Error())
+	snapDir := t.TempDir()
+	meta := makeRaftMeta("test-incremental-file-missing-crc", 100, 1, 1)
+	sink := NewSink(snapDir, meta, nil, nil)
+	sink.fatalFn = nil // disable hard exit so error propagates to caller
+	if err := sink.Open(); err != nil {
+		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
-	hdrBytes, err := marshalSnapshotHeader(hdr)
-	if err != nil {
-		t.Fatalf("unexpected error marshaling header: %s", err.Error())
+
+	if err := sink.IngestWALDir(NewStagingDir(walDir)); err != nil {
+		t.Fatalf("unexpected error ingesting WAL directory: %s", err.Error())
+	}
+
+	// Close should fail because the .crc32 file is missing.
+	if err := sink.Close(); err == nil {
+		t.Fatalf("expected error closing sink with missing CRC file, got nil")
+	}
+}
+
+// Test_Sink_WriteCannotNameDirectory tests that a snapshot stream cannot direct
+// the sink at a directory on the local filesystem. The stream written is one
+// which an earlier version of the header format used to do exactly that.
+func Test_Sink_WriteCannotNameDirectory(t *testing.T) {
+	walDir := filepath.Join(t.TempDir(), "wal-dir")
+	if err := os.Mkdir(walDir, 0755); err != nil {
+		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
+	}
+	walPath := filepath.Join(walDir, "00000000000000000001.wal")
+	mustCopyFile(t, "testdata/db-and-wals/wal-01", walPath)
+	mustWriteCRC32File(t, walPath)
+
+	// SnapshotHeader{format_version: 1, <field 3>: {<field 1>: walDir}}
+	inner := append([]byte{0x0a, byte(len(walDir))}, walDir...)
+	hdrBytes := append([]byte{0x08, 0x01, 0x1a, byte(len(inner))}, inner...)
+	if len(walDir) > 0x7f || len(inner) > 0x7f {
+		t.Fatalf("WAL dir path too long for single-byte length encoding: %s", walDir)
 	}
 
 	var frameBuf bytes.Buffer
@@ -324,20 +309,28 @@ func Test_IncrementalFileSink_MissingCRC(t *testing.T) {
 	frameBuf.Write(hdrBytes)
 
 	snapDir := t.TempDir()
-	meta := makeRaftMeta("test-incremental-file-missing-crc", 100, 1, 1)
+	meta := makeRaftMeta("test-write-cannot-name-dir", 100, 1, 1)
 	sink := NewSink(snapDir, meta, nil, nil)
-	sink.fatalFn = nil // disable hard exit so error propagates to caller
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
-
-	if _, err := sink.Write(frameBuf.Bytes()); err != nil {
-		t.Fatalf("unexpected error writing header to sink: %s", err.Error())
+	if _, err := sink.Write(frameBuf.Bytes()); err == nil {
+		t.Fatalf("expected error writing header naming a directory, got nil")
 	}
 
-	// Close should fail because the .crc32 file is missing.
+	// Raft cancels a sink it fails to write to. It may also close it, which must
+	// neither succeed nor exit the process (fatalFn is at its default here).
 	if err := sink.Close(); err == nil {
-		t.Fatalf("expected error closing sink with missing CRC file, got nil")
+		t.Fatalf("expected error closing sink, got nil")
+	}
+	if err := sink.Cancel(); err != nil {
+		t.Fatalf("unexpected error cancelling sink: %s", err.Error())
+	}
+	if !fsutil.FileExists(walPath) {
+		t.Fatalf("expected WAL file %s to be untouched", walPath)
+	}
+	if fsutil.DirExists(filepath.Join(snapDir, meta.ID)) {
+		t.Fatalf("expected no snapshot to be installed")
 	}
 }
 

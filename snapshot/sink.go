@@ -29,9 +29,13 @@ type snapshotTypeController interface {
 
 // Sink is a sink for writing snapshot data to a Snapshot store.
 //
-// This sink is adaptive. It can handle multiple types of snapshot data,
-// including full database snapshots, incremental snapshots (WAL files),
-// and snapshot installs (DB file plus WAL files).
+// A snapshot reaches the sink in one of two ways. A full snapshot, or a snapshot
+// install (DB file plus WAL files), is written to the sink as a stream of bytes,
+// and that stream may come from another node. An incremental snapshot is not a
+// stream at all: the WAL files are already on this node's disk, so the sink is
+// given the directory holding them via IngestWALDir. Only code running in this
+// process can call IngestWALDir, so nothing received over the network can direct
+// the sink at a location on the local filesystem.
 type Sink struct {
 	dir    string
 	meta   *raft.SnapshotMeta
@@ -44,9 +48,9 @@ type Sink struct {
 	header *proto.SnapshotHeader
 	sinkW  sinker
 
-	// localWALDir is set when the header indicates an IncrementalFileSnapshot.
-	// In this case, no data follows the header; the WAL directory is moved on Close.
-	localWALDir string
+	// walDir is set by IngestWALDir, and makes this an incremental snapshot. No
+	// data is written to the sink in this case; the WAL directory is moved on Close.
+	walDir *StagingDir
 
 	stc snapshotTypeController
 
@@ -110,13 +114,44 @@ func (s *Sink) Term() uint64 {
 	return s.meta.Term
 }
 
-// Write writes snapshot data to the sink.
-//
-// If the sink is handling a Full snapshot, this function writes the data to
-// the Snapshot store as it is received. If the sink is handling an IncrementalFile
-// snapshot, this function expects no data to be written after the header, and
-// simply records the path to the WAL directory for processing on Close.
+// IngestWALDir makes this an incremental snapshot, built from the WAL files in
+// the given staging directory. The directory is moved into the Snapshot store
+// on Close. It is an error to call this function on a sink which has been
+// written to, or more than once.
+func (s *Sink) IngestWALDir(sd *StagingDir) error {
+	if !s.opened {
+		return ErrSinkNotOpen
+	}
+	if sd == nil || sd.Path() == "" {
+		return fmt.Errorf("WAL directory must be set")
+	}
+	if s.walDir != nil {
+		return fmt.Errorf("WAL directory already ingested")
+	}
+	if s.header != nil || s.buf.Len() > 0 {
+		return fmt.Errorf("cannot ingest WAL directory after data has been written")
+	}
+	if s.stc != nil {
+		dueNext, err := s.stc.DueNext()
+		if err != nil {
+			return err
+		}
+		if dueNext == Full {
+			return fmt.Errorf("full snapshot needed before incremental can be applied")
+		}
+	}
+	s.walDir = sd
+	return nil
+}
+
+// Write writes snapshot data to the sink, storing it in the Snapshot store as
+// it is received. No data may be written to a sink which has been given a WAL
+// directory via IngestWALDir.
 func (s *Sink) Write(p []byte) (n int, err error) {
+	if s.walDir != nil {
+		return 0, fmt.Errorf("unexpected data written to incremental snapshot")
+	}
+
 	// If we don't yet have a header, try to decode one.
 	if s.header == nil {
 		n, err := s.buf.Write(p)
@@ -137,22 +172,6 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 		switch p := s.header.Payload.(type) {
 		case *proto.SnapshotHeader_Full:
 			s.sinkW = NewFullSink(s.snapTmpDirPath, p.Full)
-		case *proto.SnapshotHeader_IncrementalFile:
-			if s.stc != nil {
-				dueNext, err := s.stc.DueNext()
-				if err != nil {
-					return n, err
-				}
-				if dueNext == Full {
-					return n, fmt.Errorf("full snapshot needed before incremental can be applied")
-				}
-			}
-			// No data follows this header type. Any leftover bytes are an error.
-			if s.buf.Len() > 0 {
-				return n, fmt.Errorf("unexpected data after incremental file header")
-			}
-			s.localWALDir = p.IncrementalFile.WalDirPath
-			return n, nil
 		default:
 			return n, fmt.Errorf("unrecognized snapshot header payload")
 		}
@@ -168,10 +187,6 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 	}
 
 	// We have a header, just write directly to the underlying sink.
-	if s.sinkW == nil {
-		// IncrementalFile path — no data expected after header.
-		return 0, fmt.Errorf("unexpected data after incremental file header")
-	}
 	return s.sinkW.Write(p)
 }
 
@@ -182,7 +197,7 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 // directory into place. Once it returns successfully a new snapshot has been
 // installed.
 //
-// If the sink is handling an IncrementalFile snapshot, this function moves the
+// If the sink is handling an incremental snapshot, this function moves the
 // WAL directory into the snapshot directory, writes the snapshot metadata, and
 // moves the temp snapshot directory into place. In this context Close breaks the
 // series of WAL files, so if there is an error during this process it means that
@@ -204,7 +219,7 @@ func (s *Sink) Close() (retErr error) {
 	}
 	s.opened = false
 
-	if s.sinkW == nil && s.localWALDir == "" {
+	if s.sinkW == nil && s.walDir == nil {
 		// Header was never fully received; clean up the temp directory.
 		return errors.Join(ErrIncomplete, fsutil.RemoveAll(s.snapTmpDirPath))
 	}
@@ -212,21 +227,21 @@ func (s *Sink) Close() (retErr error) {
 	defer func() {
 		if retErr != nil {
 			stats.Add(sinkErrors, 1)
-			if s.localWALDir != "" && s.fatalFn != nil {
+			if s.walDir != nil && s.fatalFn != nil {
 				s.fatalFn(retErr)
 			}
-		} else if s.localWALDir != "" {
+		} else if s.walDir != nil {
 			stats.Add(sinkIncrementalTotal, 1)
 		} else if s.sinkW != nil {
 			stats.Add(sinkFullTotal, 1)
 		}
 	}()
 
-	if s.localWALDir != "" {
-		// IncrementalFileSnapshot: atomically move the WAL directory into the
+	if s.walDir != nil {
+		// Incremental snapshot: atomically move the WAL directory into the
 		// snapshot directory, then redistribute the WAL files.
 		movedDir := filepath.Join(s.snapTmpDirPath, "wal-incoming")
-		if err := fsutil.Rename(s.localWALDir, movedDir); err != nil {
+		if err := fsutil.Rename(s.walDir.Path(), movedDir); err != nil {
 			return fmt.Errorf("failed to move WAL directory into snapshot directory: %v", err)
 		}
 		sd := NewStagingDir(movedDir)

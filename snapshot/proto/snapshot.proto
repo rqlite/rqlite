@@ -14,14 +14,14 @@ message FullSnapshot {
   repeated Header wal_headers = 2;
 }
 
-message IncrementalFileSnapshot {
-  string wal_dir_path = 1;
-}
-
 message SnapshotHeader {
   uint32 format_version = 1;
+  // Field 3 once named a directory on the local filesystem. A snapshot stream
+  // can arrive from another node, so it must never be able to do that.
+  reserved 3;
+  reserved "incremental_file";
+
   oneof payload {
     FullSnapshot full = 2;
-    IncrementalFileSnapshot incremental_file = 3;
   }
 }

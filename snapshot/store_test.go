@@ -155,16 +155,8 @@ func Test_Store_CreateIncrementalFirst_Fail(t *testing.T) {
 	mustCopyFile(t, "testdata/db-and-wals/wal-00", filepath.Join(walDir, walName))
 	mustWriteCRC32File(t, filepath.Join(walDir, walName))
 
-	streamer, err := NewSnapshotPathStreamer(walDir)
-	if err != nil {
-		t.Fatalf("Failed to create SnapshotPathStreamer: %v", err)
-	}
-	defer streamer.Close()
-
-	// Copy from streamer into sink.
-	_, err = io.Copy(sink, streamer)
-	if err == nil {
-		t.Fatalf("Expected error when writing incremental snapshot sink in empty store, got nil")
+	if err := NewWALDirState(NewStagingDir(walDir)).Persist(sink); err == nil {
+		t.Fatalf("Expected error when persisting incremental snapshot to sink in empty store, got nil")
 	}
 }
 
@@ -1771,7 +1763,7 @@ func createSnapshotInStore(t *testing.T, store *Store, id string, index, term, c
 			t.Fatalf("Failed to copy snapshot data to sink: %v", err)
 		}
 	} else {
-		// Incremental snapshot via SnapshotPathStreamer.
+		// Incremental snapshot via WAL directory.
 		walDir := filepath.Join(t.TempDir(), "wal-dir")
 		if err := os.Mkdir(walDir, 0755); err != nil {
 			t.Fatalf("Failed to create WAL dir: %v", err)
@@ -1782,14 +1774,8 @@ func createSnapshotInStore(t *testing.T, store *Store, id string, index, term, c
 			mustWriteCRC32File(t, filepath.Join(walDir, name))
 		}
 
-		streamer, err := NewSnapshotPathStreamer(walDir)
-		if err != nil {
-			t.Fatalf("Failed to create SnapshotPathStreamer: %v", err)
-		}
-		defer streamer.Close()
-
-		if _, err = io.Copy(sink, streamer); err != nil {
-			t.Fatalf("Failed to copy snapshot data to sink: %v", err)
+		if err := NewWALDirState(NewStagingDir(walDir)).Persist(sink); err != nil {
+			t.Fatalf("Failed to persist WAL directory to sink: %v", err)
 		}
 	}
 

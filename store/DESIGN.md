@@ -60,7 +60,7 @@ The high-level flow:
 5. **Decide full vs incremental.** `snapshotDueNext()` combines two signals: what `snapshotStore.DueNext()` says (the `FULL_NEEDED` flag), and `dbModified()` — whether the SQLite file has been touched outside the Store's control since the last snapshot. Either signal forces a full.
 6. **Build the FSM snapshot.**
    - **Full path**: checkpoint any outstanding WAL into the database file, then construct a `snapshot.SnapshotStreamer` that streams the live `db.sqlite` file framed by a `FullSnapshot` header.
-   - **Incremental path**: write a compacted WAL into the staging directory via `StagingDir.CreateWAL` and `WALWriter`, run the SQLite checkpointer with that writer as its sink, mark the WAL valid by closing the writer, and construct a `SnapshotPathStreamer` that emits only an `IncrementalFileSnapshot` header pointing at the staging directory. The actual WAL bytes never travel through Raft's snapshot transport — the snapshot Sink moves the directory directly when it receives the header.
+   - **Incremental path**: write a compacted WAL into the staging directory via `StagingDir.CreateWAL` and `WALWriter`, run the SQLite checkpointer with that writer as its sink, mark the WAL valid by closing the writer, and construct a `WALDirState` which hands the staging directory to the snapshot Sink. The actual WAL bytes never travel through Raft's snapshot transport — the snapshot Sink moves the directory directly.
 7. **Wrap in `FSMSnapshot`** (the local type, not the snapshot package's). This wrapper carries:
    - `Type` — Full or Incremental, for logging and stats.
    - `Finalizer` — runs after a successful `Persist`. The finalizer is `createSnapshotFingerprint`, which writes the clean-snapshot file (see the next section).
