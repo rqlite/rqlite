@@ -1,6 +1,6 @@
 ## v10.7.5 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #3069](https://github.com/rqlite/rqlite/pull/3069): Keep a full snapshot due until one reaches the Snapshot Store, even if the reason it became due is no longer detectable.
+- [PR #3069](https://github.com/rqlite/rqlite/pull/3069): Persist detection of modified database via _FULL snapshot needed_ file, which persists until FULL snapshot completes.
 - [PR #3068](https://github.com/rqlite/rqlite/pull/3068): A recovering node never restores from snapshotted state.
 - [PR #3067](https://github.com/rqlite/rqlite/pull/3067): Discard any staged WAL files when the database is fully replaced by a load, boot, or restore. Thanks @clarkmcc
 - [PR #3072](https://github.com/rqlite/rqlite/pull/3072): Join may only replace a node of the same suffrage.
