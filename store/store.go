@@ -54,6 +54,15 @@ var (
 	// operation.
 	ErrNotLeader = errors.New("not leader")
 
+	// ErrJoinSuffrageMismatch is returned when a join request would replace
+	// an existing node of a different type, such as a non-voter replacing
+	// a voter.
+	ErrJoinSuffrageMismatch = errors.New("join would replace node of different suffrage")
+
+	// ErrJoinReplacesMultiple is returned when a join request would replace
+	// more than one existing node.
+	ErrJoinReplacesMultiple = errors.New("join would replace more than one node")
+
 	// ErrLeaderNotFound is returned when a node cannot locate a leader.
 	ErrLeaderNotFound = errors.New("leader not found")
 
@@ -182,6 +191,7 @@ const (
 	numJoins                    = "num_joins"
 	numIgnoredJoins             = "num_ignored_joins"
 	numRemovedBeforeJoins       = "num_removed_before_joins"
+	numRejectedJoins            = "num_rejected_joins"
 	numDemotes                  = "num_demotes"
 	numIgnoredDemotes           = "num_ignored_demotes"
 	numPromotes                 = "num_promotes"
@@ -252,6 +262,7 @@ func ResetStats() {
 	stats.Add(numJoins, 0)
 	stats.Add(numIgnoredJoins, 0)
 	stats.Add(numRemovedBeforeJoins, 0)
+	stats.Add(numRejectedJoins, 0)
 	stats.Add(numDemotes, 0)
 	stats.Add(numIgnoredDemotes, 0)
 	stats.Add(numPromotes, 0)
@@ -613,6 +624,9 @@ func (s *Store) Open() (retErr error) {
 	}
 	s.logger.Printf("%d preexisting snapshots present", len(snaps))
 
+	// Are we about to recover a node from a static config?
+	recoveringNode := fsutil.PathExists(s.peersPath)
+
 	// Now, check if the most recent snapshot operation ran to completion
 	// without error and also check if the underlying DB file is unchanged since
 	// that snapshot. It shouldn't be changed -- that would require manual
@@ -621,6 +635,7 @@ func (s *Store) Open() (retErr error) {
 	// scenarios. Anyway if it all looks good we can skip restoring the SQLite
 	// database from the Raft snapshot store because the contents are logically
 	// the same.
+
 	removeDBFiles := true
 	if err := func() error {
 		if snapshotStore.Len() == 0 {
@@ -637,6 +652,10 @@ func (s *Store) Open() (retErr error) {
 			}
 		}()
 
+		if recoveringNode {
+			s.logger.Printf("node recovery requested so full restore needed, ignoring snapshots")
+			return nil
+		}
 		if !fsutil.PathExists(s.cleanSnapshotPath) {
 			return nil
 		}
@@ -763,7 +782,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Request to recover node?
-	if fsutil.PathExists(s.peersPath) {
+	if recoveringNode {
 		s.logger.Printf("attempting node recovery using %s", s.peersPath)
 		config, err := raft.ReadConfigJSON(s.peersPath)
 		if err != nil {
@@ -781,8 +800,6 @@ func (s *Store) Open() (retErr error) {
 		if err := fsutil.Rename(s.peersPath, s.peersInfoPath); err != nil {
 			return fmt.Errorf("failed to move %s after recovery: %s", s.peersPath, err.Error())
 		}
-		// Recovering a node creates a new snapshot. We need to use it on startup.
-		raftConfig.NoSnapshotRestoreOnStart = false
 		s.logger.Printf("node recovered successfully using %s", s.peersPath)
 		stats.Add(numRecoveries, 1)
 	}
@@ -2150,6 +2167,16 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 
 // Join joins a node, identified by id and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
+//
+// If the cluster already has a node with the same ID or the same address,
+// but not both, the joining node replaces it. A joining node may only
+// replace a node of its own type: a voter replaces a voter, and a non-voter
+// replaces a non-voter. Otherwise ErrJoinSuffrageMismatch is returned and
+// the cluster is left unchanged.
+//
+// A joining node replaces at most one node. If its ID matches one node and
+// its address matches another, ErrJoinReplacesMultiple is returned and the
+// cluster is left unchanged.
 func (s *Store) Join(jr *proto.JoinRequest) error {
 	if !s.open.Is() {
 		return ErrNotOpen
@@ -2177,26 +2204,50 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 		return err
 	}
 
+	// A node already in the configuration with either the joining node's ID
+	// or address, but not both, is displaced by the joining node. A join may
+	// only displace a node of its own type, and at most one node, so check
+	// every such node before removing any.
+	var displaced []raft.ServerID
 	for _, srv := range configFuture.Configuration().Servers {
-		// If a node already exists with either the joining node's ID or address,
-		// that node may need to be removed from the config first.
-		if srv.ID == raft.ServerID(id) || srv.Address == raft.ServerAddress(addr) {
-			// However, if *both* the ID and the address are the same, then no
-			// join is actually needed.
-			if srv.Address == raft.ServerAddress(addr) && srv.ID == raft.ServerID(id) {
-				stats.Add(numIgnoredJoins, 1)
-				s.numIgnoredJoins++
-				s.logger.Printf("node %s at %s already member of cluster, ignoring join request", id, addr)
-				return nil
-			}
-
-			if err := s.remove(string(srv.ID)); err != nil {
-				s.logger.Printf("failed to remove node %s: %v", srv.ID, err)
-				return err
-			}
-			stats.Add(numRemovedBeforeJoins, 1)
-			s.logger.Printf("removed node %s prior to rejoin with changed ID or address", srv.ID)
+		sameID := srv.ID == raft.ServerID(id)
+		sameAddr := srv.Address == raft.ServerAddress(addr)
+		if !sameID && !sameAddr {
+			continue
 		}
+
+		// If both the ID and the address are the same, then no join is
+		// actually needed.
+		if sameID && sameAddr {
+			stats.Add(numIgnoredJoins, 1)
+			s.numIgnoredJoins++
+			s.logger.Printf("node %s at %s already member of cluster, ignoring join request", id, addr)
+			return nil
+		}
+
+		if srvVoter := srv.Suffrage != raft.Nonvoter; srvVoter != voter {
+			stats.Add(numRejectedJoins, 1)
+			s.logger.Printf("rejecting join request from node %s at %s as %s, it would replace %s %s at %s",
+				id, addr, prettyVoter(voter), prettyVoter(srvVoter), srv.ID, srv.Address)
+			return ErrJoinSuffrageMismatch
+		}
+		displaced = append(displaced, srv.ID)
+	}
+	if len(displaced) > 1 {
+		stats.Add(numRejectedJoins, 1)
+		s.logger.Printf("rejecting join request from node %s at %s, it would replace nodes %v",
+			id, addr, displaced)
+		return ErrJoinReplacesMultiple
+	}
+
+	if len(displaced) == 1 {
+		srvID := displaced[0]
+		if err := s.remove(string(srvID)); err != nil {
+			s.logger.Printf("failed to remove node %s: %v", srvID, err)
+			return err
+		}
+		stats.Add(numRemovedBeforeJoins, 1)
+		s.logger.Printf("removed node %s prior to rejoin with changed ID or address", srvID)
 	}
 
 	var f raft.IndexFuture
@@ -2723,6 +2774,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
 			return nil, err
 		}
+
 		if meta, _, err := s.checkpointer.Checkpoint(nil, truncateTimeout); err != nil {
 			return nil, fmt.Errorf("checkpoint failed during full snapshot: %w", err)
 		} else if !meta.Success() {
