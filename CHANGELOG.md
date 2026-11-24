@@ -1,3 +1,7 @@
+## v10.7.5 (unreleased)
+### Implementation changes and bug fixes
+- [PR #3072](https://github.com/rqlite/rqlite/pull/3072): Join may only replace a node of the same suffrage.
+
 ## v10.7.4 (November 19th 2026)
 This release addresses a bug related to [rewriting of time-related functions](https://rqlite.io/docs/api/non-deterministic/) when each node is in a different timezone. Dependencies also upgraded.
 
