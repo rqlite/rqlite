@@ -1,3 +1,6 @@
+## v10.7.6 (unreleased)
+- [PR #3077](https://github.com/rqlite/rqlite/pull/3077): Record the latest configuration entry log index in the FSM wrapper.
+
 ## v10.7.5 (November 23rd 2026)
 This release addresses a [moderate severity security issue](https://github.com/rqlite/rqlite/security/advisories/GHSA-rp9c-44g4-v8m3). If you use [authentication](https://rqlite.io/docs/guides/security/) with [read-replica nodes](https://rqlite.io/docs/clustering/read-replicas/) you should upgrade.
 

@@ -188,6 +188,7 @@ const (
 	numProviderProvidesFail     = "num_provider_provides_fail"
 	numUncompressedCommands     = "num_uncompressed_commands"
 	numCompressedCommands       = "num_compressed_commands"
+	numConfigurationCommands    = "num_configuration_commands"
 	numJoins                    = "num_joins"
 	numIgnoredJoins             = "num_ignored_joins"
 	numRemovedBeforeJoins       = "num_removed_before_joins"
@@ -259,6 +260,7 @@ func ResetStats() {
 	stats.Add(numAutoRestoresFailed, 0)
 	stats.Add(numUncompressedCommands, 0)
 	stats.Add(numCompressedCommands, 0)
+	stats.Add(numConfigurationCommands, 0)
 	stats.Add(numJoins, 0)
 	stats.Add(numIgnoredJoins, 0)
 	stats.Add(numRemovedBeforeJoins, 0)

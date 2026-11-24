@@ -7,6 +7,15 @@ import (
 	"github.com/hashicorp/raft"
 )
 
+func Test_FSM_ConfigurationIndex(t *testing.T) {
+	fsm := NewFSM(nil)
+	cfgIndex := uint64(1234)
+	fsm.StoreConfiguration(cfgIndex, raft.Configuration{})
+	if exp, got := cfgIndex, fsm.ConfigurationIndex(); exp != got {
+		t.Fatalf("incorrect Configuration Index returned by FSM, exp %d, got %d", exp, got)
+	}
+}
+
 func Test_FSMSnapshot_Finalizer(t *testing.T) {
 	finalizerCalled := false
 	f := FSMSnapshot{

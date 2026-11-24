@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -15,7 +16,8 @@ var fsmSnapshotErrLogger = log.New(os.Stderr, "[fsm-snapshot] ", log.LstdFlags)
 
 // FSM is a wrapper around the Store which implements raft.FSM.
 type FSM struct {
-	s *Store
+	s        *Store
+	cfgIndex atomic.Uint64
 }
 
 // NewFSM returns a new FSM.
@@ -36,6 +38,18 @@ func (f *FSM) Snapshot() (raft.FSMSnapshot, error) {
 // Restore restores the Store from a snapshot.
 func (f *FSM) Restore(rc io.ReadCloser) error {
 	return f.s.fsmRestore(rc)
+}
+
+// StoreConfiguration implements the raft.ConfigurationStore interface.
+func (f *FSM) StoreConfiguration(index uint64, _ raft.Configuration) {
+	stats.Add(numConfigurationCommands, 1)
+	f.cfgIndex.Store(index)
+}
+
+// ConfigurationIndex returns the Raft log index associated with the most recently
+// commited Configuration entry.
+func (f *FSM) ConfigurationIndex() uint64 {
+	return f.cfgIndex.Load()
 }
 
 // FSMSnapshot is a wrapper around raft.FSMSnapshot which adds an optional
