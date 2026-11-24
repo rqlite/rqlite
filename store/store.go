@@ -54,6 +54,15 @@ var (
 	// operation.
 	ErrNotLeader = errors.New("not leader")
 
+	// ErrJoinSuffrageMismatch is returned when a join request would replace
+	// an existing node of a different type, such as a non-voter replacing
+	// a voter.
+	ErrJoinSuffrageMismatch = errors.New("join would replace node of different suffrage")
+
+	// ErrJoinReplacesMultiple is returned when a join request would replace
+	// more than one existing node.
+	ErrJoinReplacesMultiple = errors.New("join would replace more than one node")
+
 	// ErrLeaderNotFound is returned when a node cannot locate a leader.
 	ErrLeaderNotFound = errors.New("leader not found")
 
@@ -182,6 +191,7 @@ const (
 	numJoins                    = "num_joins"
 	numIgnoredJoins             = "num_ignored_joins"
 	numRemovedBeforeJoins       = "num_removed_before_joins"
+	numRejectedJoins            = "num_rejected_joins"
 	numDemotes                  = "num_demotes"
 	numIgnoredDemotes           = "num_ignored_demotes"
 	numPromotes                 = "num_promotes"
@@ -252,6 +262,7 @@ func ResetStats() {
 	stats.Add(numJoins, 0)
 	stats.Add(numIgnoredJoins, 0)
 	stats.Add(numRemovedBeforeJoins, 0)
+	stats.Add(numRejectedJoins, 0)
 	stats.Add(numDemotes, 0)
 	stats.Add(numIgnoredDemotes, 0)
 	stats.Add(numPromotes, 0)
@@ -776,6 +787,11 @@ func (s *Store) Open() (retErr error) {
 		config, err := raft.ReadConfigJSON(s.peersPath)
 		if err != nil {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())
+		}
+
+		// Recovering a node invalidates any existing SQLite file.
+		if err := s.discardSnapshotBaseline(); err != nil {
+			return fmt.Errorf("failed to discard snapshot baseline during RecoverNode: %w", err)
 		}
 		if err = RecoverNode(s.raftDir, s.dbConf, s.logger, s.raftLog,
 			s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
@@ -2151,6 +2167,16 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 
 // Join joins a node, identified by id and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
+//
+// If the cluster already has a node with the same ID or the same address,
+// but not both, the joining node replaces it. A joining node may only
+// replace a node of its own type: a voter replaces a voter, and a non-voter
+// replaces a non-voter. Otherwise ErrJoinSuffrageMismatch is returned and
+// the cluster is left unchanged.
+//
+// A joining node replaces at most one node. If its ID matches one node and
+// its address matches another, ErrJoinReplacesMultiple is returned and the
+// cluster is left unchanged.
 func (s *Store) Join(jr *proto.JoinRequest) error {
 	if !s.open.Is() {
 		return ErrNotOpen
@@ -2178,26 +2204,50 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 		return err
 	}
 
+	// A node already in the configuration with either the joining node's ID
+	// or address, but not both, is displaced by the joining node. A join may
+	// only displace a node of its own type, and at most one node, so check
+	// every such node before removing any.
+	var displaced []raft.ServerID
 	for _, srv := range configFuture.Configuration().Servers {
-		// If a node already exists with either the joining node's ID or address,
-		// that node may need to be removed from the config first.
-		if srv.ID == raft.ServerID(id) || srv.Address == raft.ServerAddress(addr) {
-			// However, if *both* the ID and the address are the same, then no
-			// join is actually needed.
-			if srv.Address == raft.ServerAddress(addr) && srv.ID == raft.ServerID(id) {
-				stats.Add(numIgnoredJoins, 1)
-				s.numIgnoredJoins++
-				s.logger.Printf("node %s at %s already member of cluster, ignoring join request", id, addr)
-				return nil
-			}
-
-			if err := s.remove(string(srv.ID)); err != nil {
-				s.logger.Printf("failed to remove node %s: %v", srv.ID, err)
-				return err
-			}
-			stats.Add(numRemovedBeforeJoins, 1)
-			s.logger.Printf("removed node %s prior to rejoin with changed ID or address", srv.ID)
+		sameID := srv.ID == raft.ServerID(id)
+		sameAddr := srv.Address == raft.ServerAddress(addr)
+		if !sameID && !sameAddr {
+			continue
 		}
+
+		// If both the ID and the address are the same, then no join is
+		// actually needed.
+		if sameID && sameAddr {
+			stats.Add(numIgnoredJoins, 1)
+			s.numIgnoredJoins++
+			s.logger.Printf("node %s at %s already member of cluster, ignoring join request", id, addr)
+			return nil
+		}
+
+		if srvVoter := srv.Suffrage != raft.Nonvoter; srvVoter != voter {
+			stats.Add(numRejectedJoins, 1)
+			s.logger.Printf("rejecting join request from node %s at %s as %s, it would replace %s %s at %s",
+				id, addr, prettyVoter(voter), prettyVoter(srvVoter), srv.ID, srv.Address)
+			return ErrJoinSuffrageMismatch
+		}
+		displaced = append(displaced, srv.ID)
+	}
+	if len(displaced) > 1 {
+		stats.Add(numRejectedJoins, 1)
+		s.logger.Printf("rejecting join request from node %s at %s, it would replace nodes %v",
+			id, addr, displaced)
+		return ErrJoinReplacesMultiple
+	}
+
+	if len(displaced) == 1 {
+		srvID := displaced[0]
+		if err := s.remove(string(srvID)); err != nil {
+			s.logger.Printf("failed to remove node %s: %v", srvID, err)
+			return err
+		}
+		stats.Add(numRemovedBeforeJoins, 1)
+		s.logger.Printf("removed node %s prior to rejoin with changed ID or address", srvID)
 	}
 
 	var f raft.IndexFuture
