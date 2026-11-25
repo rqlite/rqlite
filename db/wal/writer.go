@@ -40,6 +40,16 @@ type Frame struct {
 	Pgno   uint32
 	Commit uint32
 	Data   []byte
+
+	// Prev and Source are the cumulative checksums of the source WAL
+	// immediately before and after this frame, and HasChecksums reports that
+	// they are set. The Writer advances its running checksum by this frame's
+	// transition instead of checksumming the frame bytes, so the emitted chain
+	// is correct no matter which subset of frames the Writer is handed, and
+	// page data is never read. Both built-in iterators set these; an iterator
+	// that does not cannot be written out.
+	Prev, Source [2]uint32
+	HasChecksums bool
 }
 
 // WALIterator defines the interface for WAL frame iteration.
@@ -53,8 +63,8 @@ type Writer struct {
 	r                WALIterator
 	rHeader          *WALHeader
 	chksum1, chksum2 uint32
-	bo               binary.ByteOrder
 	frmHdr           [WALFrameHeaderSize]byte
+	frameMatrix      checksumMatrix
 }
 
 // NewWriter returns a new Writer.
@@ -68,13 +78,11 @@ func NewWriter(r WALIterator) (*Writer, error) {
 	}
 	w.rHeader = rh
 	w.chksum1, w.chksum2 = w.rHeader.Checksum1, w.rHeader.Checksum2
-	switch magic := w.rHeader.Magic; magic {
-	case 0x377f0682:
-		w.bo = binary.LittleEndian
-	case 0x377f0683:
-		w.bo = binary.BigEndian
+	w.frameMatrix = checksumMatrixPow(1 + uint64(rh.PageSize)/8)
+	switch rh.Magic {
+	case 0x377f0682, 0x377f0683:
 	default:
-		return nil, fmt.Errorf("invalid wal header magic: %x", magic)
+		return nil, fmt.Errorf("invalid wal header magic: %x", rh.Magic)
 	}
 
 	return w, nil
@@ -138,6 +146,9 @@ func (w *Writer) writeWALHeader(ww io.Writer) (n int64, err error) {
 }
 
 func (w *Writer) writeFrame(ww io.Writer, frame *Frame) (n int64, err error) {
+	if !frame.HasChecksums {
+		return 0, fmt.Errorf("frame for page %d carries no source checksums", frame.Pgno)
+	}
 	frmHdr := w.frmHdr[:]
 
 	// Calculate the frame header.
@@ -146,17 +157,11 @@ func (w *Writer) writeFrame(ww io.Writer, frame *Frame) (n int64, err error) {
 	binary.BigEndian.PutUint32(frmHdr[8:], w.rHeader.Salt1)
 	binary.BigEndian.PutUint32(frmHdr[12:], w.rHeader.Salt2)
 
-	// Checksum of frame header: "...the first 8 bytes..."
-	w.chksum1, w.chksum2, err = WALChecksum(w.bo, w.chksum1, w.chksum2, frmHdr[:8])
-	if err != nil {
-		return n, fmt.Errorf("error computing frame header checksum: %s", err)
-	}
-
-	// Update checksum using frame data: "..the content of all frames up to and including the current frame."
-	w.chksum1, w.chksum2, err = WALChecksum(w.bo, w.chksum1, w.chksum2, frame.Data)
-	if err != nil {
-		return n, fmt.Errorf("error computing frame data checksum: %s", err)
-	}
+	// Advance the running checksum by this frame's source transition. The
+	// frame bytes are unchanged from the source WAL, so this is exactly what
+	// checksumming them would produce; the page data is never read here.
+	d := w.frameMatrix.apply(w.chksum1-frame.Prev[0], w.chksum2-frame.Prev[1])
+	w.chksum1, w.chksum2 = frame.Source[0]+d[0], frame.Source[1]+d[1]
 	binary.BigEndian.PutUint32(frmHdr[16:], w.chksum1)
 	binary.BigEndian.PutUint32(frmHdr[20:], w.chksum2)
 
