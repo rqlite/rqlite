@@ -78,6 +78,7 @@ type Uploader struct {
 	storageClient StorageClient
 	dataProvider  DataProvider
 	interval      time.Duration
+	tmpDir        string // Directory in which data-for-upload is staged.
 
 	nRetries      int           // Number of times to retry a failed Provide.
 	retryInterval time.Duration // Time to wait between Provide attempts.
@@ -89,12 +90,14 @@ type Uploader struct {
 	lastIndex uint64 // The last index of the data most-recently uploaded.
 }
 
-// NewUploader creates a new Uploader service.
-func NewUploader(storageClient StorageClient, dataProvider DataProvider, interval time.Duration) *Uploader {
+// NewUploader creates a new Uploader service. Data to be uploaded is first
+// staged in a temporary file in tmpDir, which must exist.
+func NewUploader(storageClient StorageClient, dataProvider DataProvider, interval time.Duration, tmpDir string) *Uploader {
 	return &Uploader{
 		storageClient: storageClient,
 		dataProvider:  dataProvider,
 		interval:      interval,
+		tmpDir:        tmpDir,
 		nRetries:      10,
 		retryInterval: 500 * time.Millisecond,
 		logger:        log.New(os.Stderr, "[uploader] ", log.LstdFlags),
@@ -158,7 +161,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 	// a later, smaller, attempt to upload.
 	var fd *os.File
 	for n := 0; ; n++ {
-		fd, err = tempFD()
+		fd, err = os.CreateTemp(u.tmpDir, "rqlite-upload")
 		if err != nil {
 			return err
 		}
@@ -214,8 +217,4 @@ func (u *Uploader) upload(ctx context.Context) error {
 	u.logger.Printf("completed auto upload of %s to %s in %s",
 		humanize.Bytes(uint64(cr.Count())), u.storageClient, u.lastUploadDuration)
 	return nil
-}
-
-func tempFD() (*os.File, error) {
-	return os.CreateTemp("", "rqlite-upload")
 }

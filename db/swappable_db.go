@@ -161,13 +161,6 @@ func (s *SwappableDB) Backup(path string, vacuum bool) (sz int64, retErr error) 
 	return s.db.Backup(path, vacuum)
 }
 
-// Serialize calls Serialize on the underlying database.
-func (s *SwappableDB) Serialize() ([]byte, error) {
-	s.dbMu.RLock()
-	defer s.dbMu.RUnlock()
-	return s.db.Serialize()
-}
-
 // StmtReadOnly calls StmtReadOnly on the underlying database.
 func (s *SwappableDB) StmtReadOnly(sql string) (bool, error) {
 	s.dbMu.RLock()

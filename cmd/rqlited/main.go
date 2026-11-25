@@ -30,6 +30,7 @@ import (
 	"github.com/rqlite/rqlite/v10/db/extensions"
 	"github.com/rqlite/rqlite/v10/db/querylog"
 	httpd "github.com/rqlite/rqlite/v10/http"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rarchive"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/otlp"
@@ -58,6 +59,10 @@ Visit https://www.rqlite.io to learn more.`
 
 const (
 	shutdownTimeout = 10 * time.Second
+
+	// tmpDirName is the name of the directory, within the data directory,
+	// in which the node creates its temporary files.
+	tmpDirName = "tmp"
 )
 
 func init() {
@@ -113,6 +118,13 @@ func main() {
 	}
 	raftTn := tcp.NewLayer(raftLn, raftDialer)
 
+	// Create the directory for temporary files, emptying it of anything left
+	// behind by a previous run.
+	tmpDir, err := createTempDir(cfg)
+	if err != nil {
+		log.Fatalf("failed to create temporary directory: %s", err.Error())
+	}
+
 	// Create extension store.
 	extensionsStore, err := createExtensionsStore(cfg)
 	if err != nil {
@@ -161,7 +173,7 @@ func main() {
 		} else {
 			log.Printf("auto-restore requested, initiating download")
 			start := time.Now()
-			path, errOK, err := restore.DownloadFile(mainCtx, cfg.AutoRestoreFile)
+			path, errOK, err := restore.DownloadFile(mainCtx, cfg.AutoRestoreFile, tmpDir)
 			if err != nil {
 				var b strings.Builder
 				b.WriteString(fmt.Sprintf("failed to download auto-restore file: %s", err.Error()))
@@ -259,7 +271,7 @@ func main() {
 	log.Printf("visit the rqlite console for this node at %s/console/", cfg.HTTPURL())
 
 	// Start any requested auto-backups
-	backupSrv, err := startAutoBackups(mainCtx, cfg, str)
+	backupSrv, err := startAutoBackups(mainCtx, cfg, str, tmpDir)
 	if err != nil {
 		log.Fatalf("failed to start auto-backups: %s", err.Error())
 	}
@@ -332,7 +344,7 @@ func main() {
 	log.Println("rqlite server stopped")
 }
 
-func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*backup.Uploader, error) {
+func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store, tmpDir string) (*backup.Uploader, error) {
 	if cfg.AutoBackupFile == "" {
 		return nil, nil
 	}
@@ -347,7 +359,7 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*back
 		return nil, fmt.Errorf("failed to parse auto-backup file: %s", err.Error())
 	}
 	provider := store.NewProvider(str, uCfg.Vacuum, !uCfg.NoCompress)
-	u := backup.NewUploader(sc, provider, time.Duration(uCfg.Interval))
+	u := backup.NewUploader(sc, provider, time.Duration(uCfg.Interval), tmpDir)
 	u.Start(ctx, str.IsLeader)
 	return u, nil
 }
@@ -372,6 +384,20 @@ func startOTLPMetrics(cfg *Config) (*otlp.Service, error) {
 		return nil, err
 	}
 	return srv, nil
+}
+
+// createTempDir creates the directory, within the data directory, in which
+// the node creates its temporary files, and returns its path. Any existing
+// contents are removed first, since nothing in it outlives the process.
+func createTempDir(cfg *Config) (string, error) {
+	dir := filepath.Join(cfg.DataPath, tmpDirName)
+	if err := fsutil.RemoveAll(dir); err != nil {
+		return "", err
+	}
+	if err := fsutil.EnsureDirExists(dir); err != nil {
+		return "", err
+	}
+	return dir, nil
 }
 
 func createExtensionsStore(cfg *Config) (*extensions.Store, error) {

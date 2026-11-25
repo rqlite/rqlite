@@ -44,7 +44,7 @@ func TestDownloader_Do(t *testing.T) {
 			if tt.compress {
 				mockClient.Compress()
 			}
-			downloader := NewDownloader(mockClient)
+			downloader := NewDownloader(mockClient, t.TempDir())
 
 			f := new(bytes.Buffer)
 			err := downloader.Do(context.Background(), f, 5*time.Second)

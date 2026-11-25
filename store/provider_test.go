@@ -71,7 +71,7 @@ func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {
 
 	s1file := tmpFd.Name()
 	if compress {
-		unCompressedFile, err := rarchive.Gunzip(tmpFd.Name())
+		unCompressedFile, err := rarchive.Gunzip(tmpFd.Name(), t.TempDir())
 		if err != nil {
 			t.Fatalf("failed to gunzip provided SQLite data: %s", err.Error())
 		}

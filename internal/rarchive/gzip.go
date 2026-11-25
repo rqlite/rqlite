@@ -9,16 +9,16 @@ import (
 )
 
 // Gzip compresses the given file and returns the path to the
-// compressed file. It is the caller's responsibility to remove
+// compressed file, which is created in dir. It is the caller's responsibility to remove
 // the compressed file when it is no longer needed.
-func Gzip(file string) (string, error) {
+func Gzip(file, dir string) (string, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 
-	tmpFd, err := os.CreateTemp("", "gzip")
+	tmpFd, err := os.CreateTemp(dir, "gzip")
 	if err != nil {
 		return "", err
 	}
@@ -40,9 +40,9 @@ func Gzip(file string) (string, error) {
 }
 
 // Gunzip decompresses the given GZIP file and returns the
-// path to the decompressed file. It is the caller's responsibility
+// path to the decompressed file, which is created in dir. It is the caller's responsibility
 // to remove the decompressed file when it is no longer needed.
-func Gunzip(file string) (string, error) {
+func Gunzip(file, dir string) (string, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return "", err
@@ -55,7 +55,7 @@ func Gunzip(file string) (string, error) {
 	}
 	defer gz.Close()
 
-	tmpFd, err := os.CreateTemp("", "gunzip")
+	tmpFd, err := os.CreateTemp(dir, "gunzip")
 	if err != nil {
 		return "", err
 	}

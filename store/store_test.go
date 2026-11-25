@@ -508,7 +508,7 @@ COMMIT;
 	}
 
 	// Gzip decompress file to a new temp file
-	guzf, err := rarchive.Gunzip(gzf.Name())
+	guzf, err := rarchive.Gunzip(gzf.Name(), t.TempDir())
 	if err != nil {
 		t.Fatalf("Failed to gunzip backup file %s", err.Error())
 	}
@@ -1921,7 +1921,7 @@ COMMIT;
 	}
 
 	// Verify the compressed backup can be decompressed and is valid
-	guzf, err := rarchive.Gunzip(gzf.Name())
+	guzf, err := rarchive.Gunzip(gzf.Name(), t.TempDir())
 	if err != nil {
 		t.Fatalf("Failed to gunzip DELETE backup file %s", err.Error())
 	}

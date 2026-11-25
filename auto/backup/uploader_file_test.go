@@ -22,7 +22,7 @@ func Test_Uploader_FileStorage_Timestamped(t *testing.T) {
 	}
 	dp := &mockDataProvider{data: "test backup data"}
 	interval := 10 * time.Millisecond
-	uploader := NewUploader(storageClient, dp, interval)
+	uploader := NewUploader(storageClient, dp, interval, t.TempDir())
 
 	// Track last index values to force multiple uploads
 	lastIndexValue := atomic.Uint64{}
@@ -111,7 +111,7 @@ func Test_Uploader_FileStorage(t *testing.T) {
 	}
 	dp := &mockDataProvider{data: "my upload data"}
 	interval := 10 * time.Millisecond
-	uploader := NewUploader(storageClient, dp, interval)
+	uploader := NewUploader(storageClient, dp, interval, t.TempDir())
 
 	uploaded := false
 	enabledFn := func() bool {

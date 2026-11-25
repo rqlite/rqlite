@@ -11,7 +11,7 @@ import (
 
 // Test_GzipFileNotFound tests the case where the input file does not exist.
 func Test_GzipFileNotFound(t *testing.T) {
-	_, err := Gzip("nonexistentfile.txt")
+	_, err := Gzip("nonexistentfile.txt", t.TempDir())
 	if err == nil {
 		t.Error("Expected an error for non-existent file, got none")
 	}
@@ -29,7 +29,7 @@ func Test_GzipSuccess(t *testing.T) {
 	}
 	tmpFile.Close()
 
-	gzFile, err := Gzip(tmpFile.Name())
+	gzFile, err := Gzip(tmpFile.Name(), t.TempDir())
 	if err != nil {
 		t.Fatalf("Gzip failed: %v", err)
 	}
@@ -77,7 +77,7 @@ func Test_Gunzip_ValidFile(t *testing.T) {
 	tmpFile.Close()
 
 	// Now test the Gunzip function
-	outFile, err := Gunzip(tmpFile.Name())
+	outFile, err := Gunzip(tmpFile.Name(), t.TempDir())
 	if err != nil {
 		t.Fatalf("Gunzip failed: %v", err)
 	}
@@ -96,7 +96,7 @@ func Test_Gunzip_ValidFile(t *testing.T) {
 
 // Test_Gunzip_FileNotFound tests if Gunzip returns an error when the file does not exist.
 func Test_Gunzip_FileNotFound(t *testing.T) {
-	_, err := Gunzip("non_existent_file.gz")
+	_, err := Gunzip("non_existent_file.gz", t.TempDir())
 	if err == nil {
 		t.Error("Expected an error when trying to decompress a non-existent file, but got none")
 	}
@@ -119,7 +119,7 @@ func Test_Gunzip_InvalidGzip(t *testing.T) {
 	tmpFile.Close()
 
 	// Now test the Gunzip function
-	_, err = Gunzip(tmpFile.Name())
+	_, err = Gunzip(tmpFile.Name(), t.TempDir())
 	if err == nil {
 		t.Error("Expected an error when trying to decompress invalid GZIP data, but got none")
 	}
@@ -136,7 +136,7 @@ func Test_Gunzip_EmptyFile(t *testing.T) {
 	tmpFile.Close()
 
 	// Now test the Gunzip function
-	_, err = Gunzip(tmpFile.Name())
+	_, err = Gunzip(tmpFile.Name(), t.TempDir())
 	if err == nil {
 		t.Error("Expected an error when trying to decompress an empty file, but got none")
 	}

@@ -2094,21 +2094,6 @@ func (s *Store) Vacuum() error {
 	return s.db.Vacuum()
 }
 
-// Database returns a copy of the underlying database. The caller MUST
-// ensure that no transaction is taking place during this call, or an error may
-// be returned. If leader is true, this operation is performed with a read
-// consistency level equivalent to "weak". Otherwise, no guarantees are made
-// about the read consistency level.
-//
-// http://sqlite.org/howtocorrupt.html states it is safe to do this
-// as long as the database is not written to during the call.
-func (s *Store) Database(leader bool) ([]byte, error) {
-	if leader && s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
-	}
-	return s.db.Serialize()
-}
-
 // CDCEventsC returns the channel on which Change Data Capture events are sent,
 // if CDC is enabled. It is the caller's responsibility to ensure that the
 // channel is read from, as the Store blocks when the channel is full.

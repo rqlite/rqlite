@@ -96,7 +96,7 @@ COMMIT;
 	}
 
 	// Gzip decompress file to a new temp file
-	guzf, err := rarchive.Gunzip(gzf.Name())
+	guzf, err := rarchive.Gunzip(gzf.Name(), t.TempDir())
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}

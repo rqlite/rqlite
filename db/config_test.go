@@ -28,7 +28,7 @@ func Test_OpenWithConfig_ConfigReuse(t *testing.T) {
 	defer other.Close()
 
 	// Serialization must still include the first database's uncheckpointed WAL.
-	data, err := db.Serialize()
+	data, err := db.Serialize(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

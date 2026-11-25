@@ -41,10 +41,11 @@ func ResetStats() {
 }
 
 // DownloadFile downloads the auto-restore file from the given URL, and returns the path to
-// the downloaded file. If the download fails, and the config is marked as continue-on-failure, then
+// the downloaded file. The file, and any temporary files needed during the download, are
+// created in tmpDir, which must exist. If the download fails, and the config is marked as continue-on-failure, then
 // the error is returned, but errOK is set to true. If the download fails, and the file is not
 // marked as continue-on-failure, then the error is returned, and errOK is set to false.
-func DownloadFile(ctx context.Context, cfgPath string) (path string, errOK bool, err error) {
+func DownloadFile(ctx context.Context, cfgPath, tmpDir string) (path string, errOK bool, err error) {
 	var f *os.File
 	defer func() {
 		if err != nil {
@@ -66,10 +67,10 @@ func DownloadFile(ctx context.Context, cfgPath string) (path string, errOK bool,
 	if err != nil {
 		return "", false, fmt.Errorf("failed to create storage client: %s", err.Error())
 	}
-	d := NewDownloader(sc)
+	d := NewDownloader(sc, tmpDir)
 
 	// Create a temporary file to download to.
-	f, err = os.CreateTemp("", "rqlite-auto-restore")
+	f, err = os.CreateTemp(tmpDir, "rqlite-auto-restore")
 	if err != nil {
 		return "", false, fmt.Errorf("failed to create temporary file: %s", err.Error())
 	}
@@ -90,13 +91,16 @@ type StorageClient interface {
 // Downloader is a struct that handles downloading data from a storage service.
 type Downloader struct {
 	storageClient StorageClient
+	tmpDir        string
 	logger        *log.Logger
 }
 
 // NewDownloader creates a new Downloader instance with the given StorageClient.
-func NewDownloader(storageClient StorageClient) *Downloader {
+// Temporary files needed during a download are created in tmpDir, which must exist.
+func NewDownloader(storageClient StorageClient, tmpDir string) *Downloader {
 	return &Downloader{
 		storageClient: storageClient,
+		tmpDir:        tmpDir,
 		logger:        log.New(os.Stderr, "[downloader] ", log.LstdFlags),
 	}
 }
@@ -116,7 +120,7 @@ func (d *Downloader) Do(ctx context.Context, w io.Writer, timeout time.Duration)
 	}()
 
 	// Create a temporary file for the download.
-	f, err := os.CreateTemp("", "rqlite-downloader")
+	f, err := os.CreateTemp(d.tmpDir, "rqlite-downloader")
 	if err != nil {
 		return err
 	}

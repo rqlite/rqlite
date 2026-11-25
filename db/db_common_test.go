@@ -2524,7 +2524,7 @@ func Test_DB_Serialize(t *testing.T) {
 	defer fsutil.Remove(dstDB.Name())
 
 	// Get the bytes, and write to a temp file.
-	b, err := db.Serialize()
+	b, err := db.Serialize(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to serialize database: %s", err.Error())
 	}

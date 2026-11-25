@@ -1101,11 +1101,11 @@ func (db *DB) copyFrom(src *DB) error {
 // Serialize returns a byte slice representation of the SQLite database. For
 // an ordinary on-disk database file, the serialization is just a copy of the
 // disk file. If the database is in WAL mode, a temporary on-disk
-// copy is made, and it is this copy that is serialized. This function must not
-// be called while any writes are happening to the database.
-func (db *DB) Serialize() ([]byte, error) {
+// copy is made in tmpDir, and it is this copy that is serialized. This function
+// must not be called while any writes are happening to the database.
+func (db *DB) Serialize(tmpDir string) ([]byte, error) {
 	if db.cfg.WAL {
-		tmpFile, err := os.CreateTemp("", "rqlite-serialize")
+		tmpFile, err := os.CreateTemp(tmpDir, "rqlite-serialize")
 		if err != nil {
 			return nil, err
 		}
@@ -1120,7 +1120,7 @@ func (db *DB) Serialize() ([]byte, error) {
 			return nil, err
 		}
 		defer newDB.Close()
-		return newDB.Serialize()
+		return newDB.Serialize(tmpDir)
 	}
 	// Simply read and return the SQLite file.
 	b, err := os.ReadFile(db.path)
