@@ -38,6 +38,18 @@ func (f *FSM) Restore(rc io.ReadCloser) error {
 	return f.s.fsmRestore(rc)
 }
 
+// StoreConfiguration implements the raft.ConfigurationStore interface.
+func (f *FSM) StoreConfiguration(index uint64, _ raft.Configuration) {
+	stats.Add(numConfigurationCommands, 1)
+	f.s.cfgIndex.Store(index)
+}
+
+// ConfigurationIndex returns the Raft log index associated with the most recently
+// commited Configuration entry.
+func (f *FSM) ConfigurationIndex() uint64 {
+	return f.s.cfgIndex.Load()
+}
+
 // FSMSnapshot is a wrapper around raft.FSMSnapshot which adds an optional
 // Finalizer, instrumentation, and logging.
 type FSMSnapshot struct {
