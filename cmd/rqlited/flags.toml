@@ -65,6 +65,17 @@ You usually need to set this if you're using a browser-based application to inte
 default = ""
 
 [[flags]]
+name = "HTTPPprof"
+cli = "http-pprof"
+section = "HTTP API"
+type = "bool"
+short_help = "Enable serving of pprof profiling information over HTTP"
+long_help = """
+When set, Go profiling information is available under <code>/debug/pprof</code> on the HTTP API. It is disabled by default because profiling data can reveal details of the running process, and capturing a profile consumes resources on the node. Only enable it when you need to profile a node.
+"""
+default = false
+
+[[flags]]
 name = "HTTPx509Cert"
 cli = "http-cert"
 section = "HTTPS and client authentication"

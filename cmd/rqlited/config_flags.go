@@ -24,6 +24,8 @@ type Config struct {
 	HTTPAdv string
 	// Value to set for Access-Control-Allow-Origin HTTP header
 	HTTPAllowOrigin string
+	// Enable serving of pprof profiling information over HTTP
+	HTTPPprof bool
 	// Path to HTTPS X.509 certificate
 	HTTPx509Cert string
 	// Path to HTTPS X.509 private key
@@ -169,6 +171,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
 	fs.StringVar(&config.HTTPAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server bind address")
 	fs.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
+	fs.BoolVar(&config.HTTPPprof, "http-pprof", false, "Enable serving of pprof profiling information over HTTP")
 	fs.StringVar(&config.HTTPx509Cert, "http-cert", "", "Path to HTTPS X.509 certificate")
 	fs.StringVar(&config.HTTPx509Key, "http-key", "", "Path to HTTPS X.509 private key")
 	fs.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
