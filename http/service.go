@@ -1787,6 +1787,12 @@ func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request, qp QueryP
 	fmt.Fprintf(w, "{\n")
 	first := true
 	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == "cmdline" {
+			// The expvar package always publishes the command line used to
+			// launch the process. It is never served, as it may reveal
+			// details of the node's configuration.
+			return
+		}
 		if qp.Key() != "" && qp.Key() != kv.Key {
 			return
 		}
