@@ -332,6 +332,24 @@ func Test_404Routes(t *testing.T) {
 	if resp.StatusCode != 404 {
 		t.Fatalf("failed to get expected 404, got %d", resp.StatusCode)
 	}
+
+	// pprof is not served unless explicitly enabled.
+	for _, path := range []string{
+		"/debug/pprof",
+		"/debug/pprof/",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/profile",
+		"/debug/pprof/symbol",
+		"/debug/pprof/heap",
+	} {
+		resp, err = client.Get(host + path)
+		if err != nil {
+			t.Fatalf("failed to make request")
+		}
+		if resp.StatusCode != 404 {
+			t.Fatalf("failed to get expected 404 for path %s, got %d", path, resp.StatusCode)
+		}
+	}
 }
 
 func Test_405Routes(t *testing.T) {
@@ -423,6 +441,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 	m := &MockStore{}
 	n := &mockClusterService{}
 	s := New("127.0.0.1:0", m, n, proxy.New(m, n), c)
+	s.EnablePprof = true
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -468,6 +487,7 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 	m := &MockStore{}
 	n := &mockClusterService{}
 	s := New("127.0.0.1:0", m, n, proxy.New(m, n), c)
+	s.EnablePprof = true
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -515,6 +535,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 	m := &MockStore{}
 	n := &mockClusterService{}
 	s := New("127.0.0.1:0", m, n, proxy.New(m, n), c)
+	s.EnablePprof = true
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}

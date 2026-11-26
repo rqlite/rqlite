@@ -318,6 +318,8 @@ type Service struct {
 
 	BuildInfo map[string]any
 
+	EnablePprof bool // Whether pprof information is served over HTTP.
+
 	logger *log.Logger
 }
 
@@ -1797,8 +1799,14 @@ func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request, qp QueryP
 	fmt.Fprintf(w, "\n}\n")
 }
 
-// handlePprof serves pprof information over HTTP.
+// handlePprof serves pprof information over HTTP, if enabled. If it is not
+// enabled the pprof paths do not exist as far as any client can tell.
 func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
+	if !s.EnablePprof {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
 	if !s.CheckRequestPerm(r, auth.PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
