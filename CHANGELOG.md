@@ -1,6 +1,6 @@
 ## v10.8.0 (unreleased)
 ### New features
-- [PR #NNNN](https://github.com/rqlite/rqlite/pull/NNNN): Add `-http-pprof` command-line flag. pprof information is no longer served over HTTP unless this flag is set.
+- [PR #3084](https://github.com/rqlite/rqlite/pull/3084): Add `-http-pprof` command-line flag. pprof information is no longer served over HTTP unless this flag is set.
 
 ## v10.7.5 (November 23rd 2026)
 This release addresses a [moderate severity security issue](https://github.com/rqlite/rqlite/security/advisories/GHSA-rp9c-44g4-v8m3). If you use [authentication](https://rqlite.io/docs/guides/security/) with [read-replica nodes](https://rqlite.io/docs/clustering/read-replicas/) you should upgrade.
