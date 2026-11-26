@@ -39,7 +39,7 @@ class TestRqliteShell(unittest.TestCase):
             ".consistency": "weak",
             ".nodes": "api_addr",
             ".status": "build",
-            ".expvar": "cmdline",
+            ".expvar": "memstats",
             ".indexes": "sql",
             ".schema": "sql",
         }

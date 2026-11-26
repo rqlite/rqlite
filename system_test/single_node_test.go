@@ -1582,6 +1582,24 @@ func Test_SingleNodeCoverage(t *testing.T) {
 	if !isJSON(str) {
 		t.Fatalf("output from expvar endpoint is not valid JSON: %s", str)
 	}
+	vars := make(map[string]json.RawMessage)
+	if err := json.Unmarshal([]byte(str), &vars); err != nil {
+		t.Fatalf("failed to unmarshal expvar output: %s", err.Error())
+	}
+	if _, ok := vars["memstats"]; !ok {
+		t.Fatalf("expvar output does not contain memstats")
+	}
+	if _, ok := vars["cmdline"]; ok {
+		t.Fatalf("expvar output contains the command line")
+	}
+
+	str, err = node.ExpvarKey("cmdline")
+	if err != nil {
+		t.Fatalf("failed to access expvar endpoint: %s", err.Error())
+	}
+	if strings.Contains(str, "cmdline") {
+		t.Fatalf("expvar output contains the command line when requested by key: %s", str)
+	}
 }
 
 // Test_SingleNodeReopen tests that a node can be re-opened OK.
