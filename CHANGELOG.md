@@ -1,4 +1,6 @@
-## v10.8.0 (unreleased)
+## v10.8.0 (November 26th 2026)
+This release disables pprof output by default, requiring a new command-line flag to be passed to enable it. It also removes command-line information from the expvar output. Both categories of information could be considered sensitive, so this release restricts access by default.
+
 ### New features
 - [PR #3084](https://github.com/rqlite/rqlite/pull/3084): Add `-http-pprof` command-line flag. pprof information is no longer served over HTTP unless this flag is set.
 
