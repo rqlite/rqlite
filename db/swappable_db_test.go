@@ -1,7 +1,10 @@
 package db
 
 import (
+	"encoding/binary"
+	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
@@ -274,5 +277,118 @@ func Test_SwapInvalidSQLiteFile(t *testing.T) {
 	err = swappableDB.Swap(invalidSQLiteFilePath)
 	if err == nil {
 		t.Fatalf("expected an error when swapping with an invalid SQLite file, got nil")
+	}
+}
+
+// A plausible SQLite header is not enough to accept a replacement. In
+// particular, rejecting an invalid replacement must leave the live database,
+// including writes still in its WAL, usable.
+func Test_SwapCorruptSQLitePreservesDatabase(t *testing.T) {
+	for _, wal := range []bool{false, true} {
+		for _, corruption := range []string{"header", "table_page"} {
+			t.Run(fmt.Sprintf("wal=%t/%s", wal, corruption), func(t *testing.T) {
+				dir := t.TempDir()
+				s, err := OpenSwappable(filepath.Join(dir, "live.db"), NewConfig(ConnConfig{}, wal))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer s.Close()
+				mustExecute(s.db, "CREATE TABLE important (id INTEGER PRIMARY KEY)")
+				mustExecute(s.db, "INSERT INTO important VALUES (1)")
+				oldDB, oldManager := s.db, s.checkpointMgr
+
+				path := filepath.Join(dir, "replacement.db")
+				var data []byte
+				if corruption == "header" {
+					data = make([]byte, 100)
+					copy(data, "SQLite format 3\x00")
+				} else {
+					candidate, err := Open(path, false, false)
+					if err != nil {
+						t.Fatal(err)
+					}
+					mustExecute(candidate, "CREATE TABLE replacement (id INTEGER PRIMARY KEY)")
+					mustExecute(candidate, "INSERT INTO replacement VALUES (42)")
+					root := mustQuery(candidate, "SELECT rootpage FROM sqlite_schema WHERE name='replacement'")[0].Values[0].Parameters[0].GetI()
+					if err := candidate.Close(); err != nil {
+						t.Fatal(err)
+					}
+					data, err = os.ReadFile(path)
+					if err != nil {
+						t.Fatal(err)
+					}
+					pageSize := int(binary.BigEndian.Uint16(data[16:18]))
+					if pageSize == 1 {
+						pageSize = 65536
+					}
+					// Keep the schema intact but invalidate the table's b-tree page.
+					data[(int(root)-1)*pageSize] = 0
+				}
+				if err := os.WriteFile(path, data, 0600); err != nil {
+					t.Fatal(err)
+				}
+				if !IsValidSQLiteFile(path) {
+					t.Fatal("fixture must pass the header-only check")
+				}
+				if err := s.Swap(path); err == nil {
+					t.Fatal("expected corrupt replacement to be rejected")
+				}
+				rows, err := s.QueryStringStmt("SELECT id FROM important")
+				if err != nil {
+					t.Fatalf("failed swap made the original database unreadable: %s", err)
+				}
+				if exp, got := `[{"columns":["id"],"types":["integer"],"values":[[1]]}]`, asJSON(rows); got != exp {
+					t.Fatalf("original data changed: got %s, want %s", got, exp)
+				}
+				if s.db != oldDB || s.checkpointMgr != oldManager {
+					t.Fatal("failed validation replaced the live database or checkpoint manager")
+				}
+				res, err := s.Execute(&proto.Request{Statements: []*proto.Statement{{Sql: "INSERT INTO important VALUES (2)"}}}, false)
+				if err != nil || len(res) != 1 || res[0].GetE().GetError() != "" {
+					t.Fatalf("failed swap made the original database unwritable: %v, %v", res, err)
+				}
+				if _, err := os.Stat(path); err != nil {
+					t.Fatalf("rejected replacement was removed: %s", err)
+				}
+			})
+		}
+	}
+}
+
+func Test_SwapSuccess_UncheckpointedWAL(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "replacement.db")
+	candidate, err := Open(path, false, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustExecute(candidate, "CREATE TABLE replacement (id INTEGER PRIMARY KEY)")
+	mustExecute(candidate, "INSERT INTO replacement VALUES (42)")
+	if err := candidate.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Stat(path + "-wal"); err != nil || fi.Size() == 0 {
+		t.Fatalf("expected an uncheckpointed WAL, got %v, %v", fi, err)
+	}
+
+	s, err := OpenSwappable(filepath.Join(dir, "live.db"), NewConfig(ConnConfig{}, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Swap(path); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.QueryStringStmt("SELECT id FROM replacement")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, got := `[{"columns":["id"],"types":["integer"],"values":[[42]]}]`, asJSON(rows); got != exp {
+		t.Fatalf("replacement WAL data lost: got %s, want %s", got, exp)
+	}
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if _, err := os.Stat(path + suffix); !os.IsNotExist(err) {
+			t.Fatalf("replacement file left behind at %s: %v", path+suffix, err)
+		}
 	}
 }

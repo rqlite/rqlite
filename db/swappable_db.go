@@ -51,13 +51,18 @@ func OpenSwappable(dbPath string, cfg *Config) (*SwappableDB, error) {
 // with the configuration the SwappableDB was opened with. The Swap operation
 // may fail on some platforms if the file at path is open by another process.
 // It is the caller's responsibility to ensure the file at path is not in use.
+// The replacement is opened and checked before closing the current database,
+// so a corrupt replacement leaves the current database available.
 func (s *SwappableDB) Swap(path string) error {
 	if !IsValidSQLiteFile(path) {
 		return fmt.Errorf("invalid SQLite data")
 	}
-
 	s.dbMu.Lock()
 	defer s.dbMu.Unlock()
+	if err := s.validateReplacement(path); err != nil {
+		return err
+	}
+
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close: %s", err)
 	}
@@ -81,6 +86,33 @@ func (s *SwappableDB) Swap(path string) error {
 		return fmt.Errorf("failed to recreate checkpoint manager: %s", err)
 	}
 	s.checkpointMgr = mgr
+	return nil
+}
+
+// validateReplacement checks more than the SQLite header: opening a database
+// can succeed even when a table page is corrupt. Use the same connection
+// configuration as the eventual swap, including any required extensions.
+func (s *SwappableDB) validateReplacement(path string) error {
+	cfg := s.cfg.clone()
+	// Closing the validation connections must leave a standalone database
+	// file, since Swap moves only that file, not its WAL or SHM sidecars.
+	cfg.Writer.ChkOnClose = CnkOnCloseModeEnabled
+	cfg.Readers.ChkOnClose = CnkOnCloseModeEnabled
+	candidate, err := OpenWithConfig(path, cfg)
+	if err != nil {
+		return fmt.Errorf("open replacement SQLite file failed: %w", err)
+	}
+	res, verifyErr := candidate.VerifyIntegrity()
+	closeErr := candidate.Close()
+	if verifyErr != nil {
+		return fmt.Errorf("verify replacement SQLite file failed: %w", verifyErr)
+	}
+	if !res.OK {
+		return fmt.Errorf("replacement SQLite file failed verification: %s", res.Issues[0])
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close replacement SQLite file failed: %w", closeErr)
+	}
 	return nil
 }
 

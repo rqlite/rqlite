@@ -2435,6 +2435,63 @@ COMMIT;
 	}
 }
 
+func Test_SingleNodeLoadCorruptBinaryPreservesData(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	er := executeRequestFromStrings([]string{
+		"CREATE TABLE important (id INTEGER PRIMARY KEY)",
+		"INSERT INTO important VALUES (1)",
+	}, false, false)
+	if _, _, err := s.Execute(context.Background(), er); err != nil {
+		t.Fatal(err)
+	}
+
+	data := make([]byte, 100)
+	copy(data, "SQLite format 3\x00")
+	if err := s.Load(context.Background(), &proto.LoadRequest{Data: data}); err == nil {
+		t.Fatal("expected corrupt load to fail")
+	}
+	qr := queryRequestFromString("SELECT id FROM important ORDER BY id", false, false, false)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	checkRows := func(want string) {
+		t.Helper()
+		rows, _, _, err := s.Query(context.Background(), qr)
+		if err != nil || len(rows) != 1 || rows[0].Error != "" || asJSON(rows[0].Values) != want {
+			t.Fatalf("expected original data %s, got %s, error: %v", want, asJSON(rows), err)
+		}
+	}
+	checkRows(`[[1]]`)
+	er = executeRequestFromString("INSERT INTO important VALUES (2)", false, false)
+	res, _, err := s.Execute(context.Background(), er)
+	if err != nil || len(res) != 1 || res[0].GetE().GetError() != "" {
+		t.Fatalf("write after rejected load failed: %v, %v", res, err)
+	}
+	checkRows(`[[1],[2]]`)
+
+	// Replaying the rejected load after restart must not poison the database.
+	s.NoSnapshotOnClose = true
+	if err := s.Close(true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Open(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	checkRows(`[[1],[2]]`)
+}
+
 func Test_SingleNodeLoad_SQLFail(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
