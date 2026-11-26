@@ -702,6 +702,120 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 	}, 100*time.Millisecond, 5*time.Second)
 }
 
+// Test_MultiNodeSnapshot_BlockedSnapshot_ThenNonMutatingCommand verifies that
+// when a blocked incremental snapshot has already checkpointed and staged the
+// WAL (leaving the live SQLite WAL empty), a subsequent snapshot still persists
+// the staged WAL after a non-mutating LogCommand (such as a Noop or STRONG
+// query) advances the FSM past the configuration entry, rather than failing
+// permanently with ErrNoWALToSnapshot.
+func Test_MultiNodeSnapshot_BlockedSnapshot_ThenNonMutatingCommand(t *testing.T) {
+	s0, ln := mustNewStore(t)
+	s0.NoSnapshotOnClose = true
+	s0.SnapshotReapThreshold = 20
+	defer ln.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`, false, false)
+	if _, _, err := s0.Execute(context.Background(), er); err != nil {
+		t.Fatalf("failed to execute: %s", err.Error())
+	}
+	if err := s0.Snapshot(0); err != nil {
+		t.Fatalf("failed to take initial full snapshot: %s", err.Error())
+	}
+
+	stmts := make([]string, 0, 1000)
+	for range 1000 {
+		stmts = append(stmts, `INSERT INTO foo(name) VALUES("fiona")`)
+	}
+	if _, _, err := s0.Execute(context.Background(), executeRequestFromStrings(stmts, false, false)); err != nil {
+		t.Fatalf("failed to insert rows: %s", err.Error())
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open s1: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join s1: %s", err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("error waiting for leader on s1: %s", err)
+	}
+
+	// First incremental snapshot attempt stages the WAL and aborts on the unapplied config entry.
+	err := s0.Snapshot(0)
+	if err == nil || !strings.Contains(err.Error(), "wait until the configuration entry at") {
+		t.Fatalf("expected configuration-entry snapshot error, got: %v", err)
+	}
+	files, err := s0.StagedWALs()
+	if err != nil {
+		t.Fatalf("failed to list staged WALs: %s", err.Error())
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected 1 staged WAL file, got %d", len(files))
+	}
+
+	// Advance the FSM past the LogConfiguration entry with a non-mutating command
+	// so the live SQLite WAL remains empty.
+	mustNoop(s0, "advance-past-config")
+	if fsutil.PathExistsWithData(s0.walPath) {
+		t.Fatalf("expected live SQLite WAL to be empty before persisting staged WAL")
+	}
+
+	// Snapshot must persist the already-staged WAL rather than returning ErrNoWALToSnapshot.
+	// Pass trailingLogs=1 so Raft truncates earlier logs and forces a joining node to
+	// restore from the persisted Full + Incremental snapshot chain.
+	if err := s0.Snapshot(1); err != nil {
+		t.Fatalf("expected snapshot of staged WAL to succeed, got: %v", err)
+	}
+	files, err = s0.StagedWALs()
+	if err != nil {
+		t.Fatalf("failed to list staged WALs after snapshot: %s", err.Error())
+	}
+	if len(files) != 0 {
+		t.Fatalf("expected staging directory to be empty after snapshot, got %d files", len(files))
+	}
+
+	// Join a third node and confirm it restores all 1000 rows from the persisted incremental snapshot.
+	beforeRestores := stats.Get(numRestores).(*expvar.Int).Value()
+	s2, ln2 := mustNewStore(t)
+	defer ln2.Close()
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open s2: %s", err.Error())
+	}
+	defer s2.Close(true)
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
+		t.Fatalf("failed to join s2: %s", err.Error())
+	}
+	if _, err := s2.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("error waiting for leader on s2: %s", err)
+	}
+
+	testPoll(t, func() bool {
+		if stats.Get(numRestores).(*expvar.Int).Value() <= beforeRestores {
+			return false
+		}
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true, false)
+		qr.Level = proto.ConsistencyLevel_NONE
+		r, _, _, err := s2.Query(context.Background(), qr)
+		if err != nil {
+			t.Fatalf("failed to query s2: %s", err.Error())
+		}
+		return asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1000]]}]`
+	}, 100*time.Millisecond, 5*time.Second)
+}
+
 func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
