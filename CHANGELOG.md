@@ -1,4 +1,6 @@
 ## v10.8.0 (November 26th 2026)
+_If you access rqlite pprof data you should read these release notes._
+
 This release disables [pprof](https://pkg.go.dev/net/http/pprof) output by default, requiring a new command-line flag to be passed to enable it. It also removes command-line information from the [expvar](https://pkg.go.dev/expvar) output. Both categories of information could be considered sensitive, so this release restricts access by default.
 
 ### New features
