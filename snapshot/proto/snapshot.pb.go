@@ -125,57 +125,12 @@ func (x *FullSnapshot) GetWalHeaders() []*Header {
 	return nil
 }
 
-type IncrementalFileSnapshot struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	WalDirPath    string                 `protobuf:"bytes,1,opt,name=wal_dir_path,json=walDirPath,proto3" json:"wal_dir_path,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *IncrementalFileSnapshot) Reset() {
-	*x = IncrementalFileSnapshot{}
-	mi := &file_snapshot_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *IncrementalFileSnapshot) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*IncrementalFileSnapshot) ProtoMessage() {}
-
-func (x *IncrementalFileSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_snapshot_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use IncrementalFileSnapshot.ProtoReflect.Descriptor instead.
-func (*IncrementalFileSnapshot) Descriptor() ([]byte, []int) {
-	return file_snapshot_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *IncrementalFileSnapshot) GetWalDirPath() string {
-	if x != nil {
-		return x.WalDirPath
-	}
-	return ""
-}
-
 type SnapshotHeader struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	FormatVersion uint32                 `protobuf:"varint,1,opt,name=format_version,json=formatVersion,proto3" json:"format_version,omitempty"`
 	// Types that are valid to be assigned to Payload:
 	//
 	//	*SnapshotHeader_Full
-	//	*SnapshotHeader_IncrementalFile
 	Payload       isSnapshotHeader_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -183,7 +138,7 @@ type SnapshotHeader struct {
 
 func (x *SnapshotHeader) Reset() {
 	*x = SnapshotHeader{}
-	mi := &file_snapshot_proto_msgTypes[3]
+	mi := &file_snapshot_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -195,7 +150,7 @@ func (x *SnapshotHeader) String() string {
 func (*SnapshotHeader) ProtoMessage() {}
 
 func (x *SnapshotHeader) ProtoReflect() protoreflect.Message {
-	mi := &file_snapshot_proto_msgTypes[3]
+	mi := &file_snapshot_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -208,7 +163,7 @@ func (x *SnapshotHeader) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotHeader.ProtoReflect.Descriptor instead.
 func (*SnapshotHeader) Descriptor() ([]byte, []int) {
-	return file_snapshot_proto_rawDescGZIP(), []int{3}
+	return file_snapshot_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *SnapshotHeader) GetFormatVersion() uint32 {
@@ -234,15 +189,6 @@ func (x *SnapshotHeader) GetFull() *FullSnapshot {
 	return nil
 }
 
-func (x *SnapshotHeader) GetIncrementalFile() *IncrementalFileSnapshot {
-	if x != nil {
-		if x, ok := x.Payload.(*SnapshotHeader_IncrementalFile); ok {
-			return x.IncrementalFile
-		}
-	}
-	return nil
-}
-
 type isSnapshotHeader_Payload interface {
 	isSnapshotHeader_Payload()
 }
@@ -251,13 +197,7 @@ type SnapshotHeader_Full struct {
 	Full *FullSnapshot `protobuf:"bytes,2,opt,name=full,proto3,oneof"`
 }
 
-type SnapshotHeader_IncrementalFile struct {
-	IncrementalFile *IncrementalFileSnapshot `protobuf:"bytes,3,opt,name=incremental_file,json=incrementalFile,proto3,oneof"`
-}
-
 func (*SnapshotHeader_Full) isSnapshotHeader_Payload() {}
-
-func (*SnapshotHeader_IncrementalFile) isSnapshotHeader_Payload() {}
 
 var File_snapshot_proto protoreflect.FileDescriptor
 
@@ -271,15 +211,11 @@ const file_snapshot_proto_rawDesc = "" +
 	"\fFullSnapshot\x12-\n" +
 	"\tdb_header\x18\x01 \x01(\v2\x10.snapshot.HeaderR\bdbHeader\x121\n" +
 	"\vwal_headers\x18\x02 \x03(\v2\x10.snapshot.HeaderR\n" +
-	"walHeaders\";\n" +
-	"\x17IncrementalFileSnapshot\x12 \n" +
-	"\fwal_dir_path\x18\x01 \x01(\tR\n" +
-	"walDirPath\"\xc0\x01\n" +
+	"walHeaders\"\x88\x01\n" +
 	"\x0eSnapshotHeader\x12%\n" +
 	"\x0eformat_version\x18\x01 \x01(\rR\rformatVersion\x12,\n" +
-	"\x04full\x18\x02 \x01(\v2\x16.snapshot.FullSnapshotH\x00R\x04full\x12N\n" +
-	"\x10incremental_file\x18\x03 \x01(\v2!.snapshot.IncrementalFileSnapshotH\x00R\x0fincrementalFileB\t\n" +
-	"\apayloadB-Z+github.com/rqlite/rqlite/v10/snapshot/protob\x06proto3"
+	"\x04full\x18\x02 \x01(\v2\x16.snapshot.FullSnapshotH\x00R\x04fullB\t\n" +
+	"\apayloadJ\x04\b\x03\x10\x04R\x10incremental_fileB-Z+github.com/rqlite/rqlite/v10/snapshot/protob\x06proto3"
 
 var (
 	file_snapshot_proto_rawDescOnce sync.Once
@@ -293,23 +229,21 @@ func file_snapshot_proto_rawDescGZIP() []byte {
 	return file_snapshot_proto_rawDescData
 }
 
-var file_snapshot_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_snapshot_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_snapshot_proto_goTypes = []any{
-	(*Header)(nil),                  // 0: snapshot.Header
-	(*FullSnapshot)(nil),            // 1: snapshot.FullSnapshot
-	(*IncrementalFileSnapshot)(nil), // 2: snapshot.IncrementalFileSnapshot
-	(*SnapshotHeader)(nil),          // 3: snapshot.SnapshotHeader
+	(*Header)(nil),         // 0: snapshot.Header
+	(*FullSnapshot)(nil),   // 1: snapshot.FullSnapshot
+	(*SnapshotHeader)(nil), // 2: snapshot.SnapshotHeader
 }
 var file_snapshot_proto_depIdxs = []int32{
 	0, // 0: snapshot.FullSnapshot.db_header:type_name -> snapshot.Header
 	0, // 1: snapshot.FullSnapshot.wal_headers:type_name -> snapshot.Header
 	1, // 2: snapshot.SnapshotHeader.full:type_name -> snapshot.FullSnapshot
-	2, // 3: snapshot.SnapshotHeader.incremental_file:type_name -> snapshot.IncrementalFileSnapshot
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_snapshot_proto_init() }
@@ -317,9 +251,8 @@ func file_snapshot_proto_init() {
 	if File_snapshot_proto != nil {
 		return
 	}
-	file_snapshot_proto_msgTypes[3].OneofWrappers = []any{
+	file_snapshot_proto_msgTypes[2].OneofWrappers = []any{
 		(*SnapshotHeader_Full)(nil),
-		(*SnapshotHeader_IncrementalFile)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -327,7 +260,7 @@ func file_snapshot_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_snapshot_proto_rawDesc), len(file_snapshot_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

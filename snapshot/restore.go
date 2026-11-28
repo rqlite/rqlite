@@ -27,6 +27,9 @@ func Restore(r io.Reader, dstPath string) (int64, error) {
 		return totalRead, fmt.Errorf("reading header length: %w", err)
 	}
 	hdrLen := binary.BigEndian.Uint32(hdrLenBuf[:])
+	if hdrLen > MaxHeaderSize {
+		return totalRead, fmt.Errorf("%w: %d bytes", ErrHeaderTooLarge, hdrLen)
+	}
 
 	// Read and parse header.
 	hdrBuf := make([]byte, hdrLen)

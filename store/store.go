@@ -2853,14 +2853,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			return nil, err
 		}
 
-		// When it comes to incremental snapshotting of WAL files, we pass the WAL directory path to the
-		// Snapshot Store indirectly via the header. The Snapshotting system knows to check for this. It
-		// will atomically move the directory into the snapshot directory and process the WAL files.
-		streamer, err := snapshot.NewSnapshotPathStreamer(sd.Path())
-		if err != nil {
-			return nil, err
-		}
-		fsmSnapshot = snapshot.NewStateReader(streamer)
+		// When it comes to incremental snapshotting of WAL files, no data is streamed to the Snapshot
+		// Store. Instead the WAL staging directory is handed to it directly, and it will atomically
+		// move the directory into the snapshot directory and process the WAL files.
+		fsmSnapshot = snapshot.NewWALDirState(sd)
 		stats.Add(numSnapshotsIncremental, 1)
 	}
 

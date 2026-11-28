@@ -63,13 +63,13 @@ The package is organized around four main operations: **creating** snapshots (si
 
 ### Creating Snapshots: Sink
 
-The `Sink` type implements `raft.SnapshotSink`. It is the entry point for Raft when persisting a new snapshot. The sink is **adaptive** — it handles both full and incremental snapshots through a single interface.
+The `Sink` type implements `raft.SnapshotSink`. It is the entry point for Raft when persisting a new snapshot. The sink is **adaptive** — it handles both full and incremental snapshots, though each reaches it differently.
 
-When Raft calls `Write`, the sink first accumulates bytes until it can decode a protobuf `SnapshotHeader` (a 4-byte big-endian length prefix followed by the marshaled header). The header's payload type determines what happens next:
+When Raft calls `Write`, the sink first accumulates bytes until it can decode a protobuf `SnapshotHeader` (a 4-byte big-endian length prefix followed by the marshaled header). A stream claiming a header larger than 1MiB is rejected as soon as the length prefix is read. What happens next depends on how the snapshot is supplied:
 
-- **FullSnapshot header**: The sink delegates to `FullSink`, which streams the incoming bytes into `data.db` and any WAL files described by the header. On `Close`, it verifies each file's CRC32 against the header (catching network corruption) and writes `.crc32` sidecar files.
+- **FullSnapshot header (via `Write`)**: The sink delegates to `FullSink`, which streams the incoming bytes into `data.db` and any WAL files described by the header. On `Close`, it verifies each file's CRC32 against the header (catching network corruption) and writes `.crc32` sidecar files.
 
-- **IncrementalFileSnapshot header**: No data follows the header. Instead, the header contains a local filesystem path to a WAL staging directory. On `Close`, the sink atomically moves that directory's contents into the snapshot directory. This is an optimization for the local-node case — WAL data is already on disk, so there is no need to stream it through Raft's snapshot transport.
+- **WAL directory (incremental)**: Nothing is written to the sink. Instead the node hands the sink its WAL staging directory by calling `IngestWALDir`. On `Close`, the sink atomically moves that directory's contents into the snapshot directory. This is an optimization for the local-node case — WAL data is already on disk, so there is no need to stream it through Raft's snapshot transport. An incremental snapshot can only be requested this way, by code running on the node itself. The byte stream, which may come from another node, has no means of naming a location on the local filesystem.
 
 The sink writes to a temporary directory (`<id>.tmp`) and atomically renames it into place on successful `Close`. If `Close` fails during an incremental snapshot, the sink calls a fatal function that terminates the process. This is a deliberate design choice: an interrupted incremental snapshot breaks the WAL chain, and a hard restart (which recovers from the last good snapshot) is preferable to requiring a full snapshot, which would pause write traffic for longer.
 
@@ -81,7 +81,7 @@ Two streamer types produce the byte stream that Raft reads when it needs to send
   - `NewSnapshotStreamer` computes CRC32 checksums on the fly (used when creating a new full snapshot from the live database).
   - `NewChecksummedSnapshotStreamer` uses pre-loaded checksums from sidecar files (used when opening an existing snapshot from the store — avoids redundant I/O).
 
-- **SnapshotPathStreamer**: Streams only the framed header (no file data follows). Used for incremental snapshots where the WAL directory path is embedded in the header and the receiver moves the files directly.
+- **WALDirState**: Not a streamer. Used for incremental snapshots, it passes the WAL staging directory to the sink directly, and the sink moves the files.
 
 ### Maintaining the Store: Reaping
 
@@ -133,7 +133,6 @@ Snapshot data is framed using a simple protocol defined in `snapshot/proto/snaps
 The `SnapshotHeader` protobuf uses a `oneof` payload:
 
 - **FullSnapshot**: Contains a `Header` for the DB file (size + CRC32) and repeated `Header` entries for WAL files.
-- **IncrementalFileSnapshot**: Contains only a `wal_dir_path` string — no file data follows.
 
 ## Store Lifecycle
 
@@ -151,7 +150,7 @@ The `SnapshotHeader` protobuf uses a `oneof` payload:
 
 ## Full Snapshot Trigger
 
-The `FULL_NEEDED` flag file signals that the next snapshot must be a full snapshot rather than an incremental one. This is set when no snapshots exist (first snapshot), or when the system detects the incremental chain is broken and cannot be continued. The `Sink` checks this flag when it receives an `IncrementalFileSnapshot` header and rejects the snapshot if a full is needed.
+The `FULL_NEEDED` flag file signals that the next snapshot must be a full snapshot rather than an incremental one. This is set when no snapshots exist (first snapshot), or when the system detects the incremental chain is broken and cannot be continued. The `Sink` checks this flag when it is handed a WAL directory and rejects the snapshot if a full is needed.
 
 ## Upgrade Support
 
@@ -167,6 +166,6 @@ The package includes upgrade paths from older snapshot formats (`Upgrade7To8` an
 
 - **Plan-execute for destructive operations.** Serializing the operation sequence to disk before execution adds I/O overhead but guarantees crash-safe, idempotent recovery. This is essential because a partially-reaped store could leave the system in an unrecoverable state.
 
-- **Local file moves for incremental snapshots.** The `IncrementalFileSnapshot` path avoids serializing WAL data through Raft's snapshot transport when the data is already on the local filesystem. This is a significant performance optimization for the common case.
+- **Local file moves for incremental snapshots.** Handing the WAL staging directory to the sink avoids serializing WAL data through Raft's snapshot transport when the data is already on the local filesystem. This is a significant performance optimization for the common case.
 
 - **WAL staging directory for resilience.** Keeping staged WAL files across failed snapshot attempts avoids falling back to full snapshots unnecessarily. This was a key improvement in v10 that reduces the frequency of expensive full snapshots.
